@@ -58,6 +58,12 @@ if (!empty($jsonBody)) {
     $params = $request;
 }
 
+Logger::debug('Request received', [
+    'uri' => $_SERVER['REQUEST_URI'],
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'input' => file_get_contents('php://input')
+]);
+
 Logger::debug('Incoming request', [
     'method' => $method,
     'uri' => $_SERVER['REQUEST_URI'],
@@ -85,7 +91,8 @@ if (count($uri) >= 1) {
             'reports' => 'Reports',
             'sync' => 'Sync',
             'integrations' => 'Integrations',
-            'apikeys' => 'ApiKeys'
+            'apikeys' => 'ApiKeys',
+            'webhook' => 'Webhook'
         ];
 
         $controllerBase = $controllerMap[$controller] ?? ucfirst($controller);
@@ -220,6 +227,11 @@ if (count($uri) >= 1) {
                 $router->addRoute('POST', 'apikeys/create', 'ApiKeysController', 'createKey');
                 $router->addRoute('PUT', 'apikeys/update', 'ApiKeysController', 'updateKey');
                 $router->addRoute('DELETE', 'apikeys/delete', 'ApiKeysController', 'deleteKey');
+                $routeRegistered = true;
+                break;
+
+            case 'webhook':
+                $router->addRoute('POST', 'webhook/events', 'WebhookController', 'addEvents');
                 $routeRegistered = true;
                 break;
 
