@@ -1,0 +1,109 @@
+.ant-table-wrapper {
+  margin-top: 16px;
+}
+
+.ant-card {
+  margin: 24px;
+}
+
+.ant-space {
+  margin-bottom: 16px;
+}
+
+.ant-tag {
+  min-width: 80px;
+  text-align: center;
+}
+
+.ant-table-cell {
+  white-space: nowrap;
+}
+
+.ant-table-cell-ellipsis {
+  max-width: 200px;
+}
+
+.expanded-row {
+  padding: 16px;
+  background-color: #fafafa;
+  border-radius: 4px;
+}
+
+.expanded-row p {
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.expanded-row .description {
+  background-color: #fff;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  border: 1px solid #f0f0f0;
+}
+
+.settings-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.module-settings {
+  background-color: #fff;
+  padding: 16px;
+  border-radius: 4px;
+  border: 1px solid #f0f0f0;
+}
+
+.module-settings h4 {
+  margin: 0 0 8px 0;
+  color: #1890ff;
+}
+
+.module-settings pre {
+  background-color: #f5f5f5;
+  padding: 8px;
+  border-radius: 4px;
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+}
+
+/* Policy type colors */
+.policy-type-default {
+  background-color: #e6f7ff;
+  border-color: #91d5ff;
+  color: #1890ff;
+}
+
+.policy-type-custom {
+  background-color: #f6ffed;
+  border-color: #b7eb8f;
+  color: #52c41a;
+}
+
+.policy-type-inherited {
+  background-color: #f9f0ff;
+  border-color: #d3adf7;
+  color: #722ed1;
+}
+
+/* Inheritance type colors */
+.inheritance-complete {
+  background-color: #f6ffed;
+  border-color: #b7eb8f;
+  color: #52c41a;
+}
+
+.inheritance-partial {
+  background-color: #fff7e6;
+  border-color: #ffd591;
+  color: #fa8c16;
+}
+
+.inheritance-none {
+  background-color: #fff1f0;
+  border-color: #ffa39e;
+  color: #f5222d;
+} 

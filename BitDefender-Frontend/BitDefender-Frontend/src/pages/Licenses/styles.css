@@ -1,0 +1,49 @@
+.ant-table-wrapper {
+  margin-top: 16px;
+}
+
+.ant-card {
+  margin: 24px;
+}
+
+.ant-space {
+  margin-bottom: 16px;
+}
+
+.ant-tag {
+  min-width: 80px;
+  text-align: center;
+}
+
+.ant-table-cell {
+  white-space: nowrap;
+}
+
+.ant-table-cell-ellipsis {
+  max-width: 200px;
+}
+
+/* Estilos específicos para tags de status */
+.ant-tag-green {
+  background: #f6ffed;
+  border-color: #b7eb8f;
+  color: #52c41a;
+}
+
+.ant-tag-red {
+  background: #fff1f0;
+  border-color: #ffa39e;
+  color: #f5222d;
+}
+
+.ant-tag-orange {
+  background: #fff7e6;
+  border-color: #ffd591;
+  color: #fa8c16;
+}
+
+/* Estilos para o tooltip da licença */
+.ant-tooltip-inner {
+  max-width: 500px;
+  word-break: break-all;
+} 

@@ -1,0 +1,79 @@
+.ant-table-wrapper {
+  margin-top: 16px;
+}
+
+.ant-card {
+  margin: 24px;
+}
+
+.ant-space {
+  margin-bottom: 16px;
+}
+
+.ant-tag {
+  min-width: 80px;
+  text-align: center;
+}
+
+.ant-table-cell {
+  white-space: nowrap;
+}
+
+.ant-table-cell-ellipsis {
+  max-width: 200px;
+}
+
+.table-actions {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Status colors */
+.status-quarantined {
+  background-color: #fff7e6;
+  border-color: #ffd591;
+  color: #fa8c16;
+}
+
+.status-restored {
+  background-color: #f6ffed;
+  border-color: #b7eb8f;
+  color: #52c41a;
+}
+
+.status-removed {
+  background-color: #fff1f0;
+  border-color: #ffa39e;
+  color: #f5222d;
+}
+
+/* Row selection styles */
+.ant-table-row-selected > td {
+  background-color: #e6f7ff !important;
+}
+
+/* Action buttons */
+.ant-btn-dangerous {
+  color: #ff4d4f;
+  border-color: #ff4d4f;
+}
+
+.ant-btn-dangerous:hover {
+  color: #fff;
+  border-color: #ff4d4f;
+  background: #ff4d4f;
+}
+
+.ant-btn-dangerous[disabled],
+.ant-btn-dangerous[disabled]:hover {
+  color: rgba(0, 0, 0, 0.25);
+  border-color: #d9d9d9;
+  background: #f5f5f5;
+}
+
+/* Tooltip styles */
+.ant-tooltip-inner {
+  max-width: 500px;
+  word-break: break-all;
+} 

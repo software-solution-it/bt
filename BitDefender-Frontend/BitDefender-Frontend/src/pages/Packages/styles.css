@@ -1,0 +1,84 @@
+.ant-table-wrapper {
+  margin-top: 16px;
+}
+
+.ant-card {
+  margin: 24px;
+}
+
+.ant-space {
+  margin-bottom: 16px;
+}
+
+.ant-tag {
+  min-width: 80px;
+  text-align: center;
+}
+
+.ant-table-cell {
+  white-space: nowrap;
+}
+
+.ant-table-cell-ellipsis {
+  max-width: 200px;
+}
+
+.expanded-row {
+  padding: 16px;
+  background-color: #fafafa;
+  border-radius: 4px;
+}
+
+.expanded-row p {
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.expanded-row .description {
+  background-color: #fff;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  border: 1px solid #f0f0f0;
+}
+
+.expanded-row .modules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.expanded-row pre {
+  background-color: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+/* Package type colors */
+.package-type-default {
+  background-color: #e6f7ff;
+  border-color: #91d5ff;
+  color: #1890ff;
+}
+
+.package-type-custom {
+  background-color: #f6ffed;
+  border-color: #b7eb8f;
+  color: #52c41a;
+}
+
+.package-type-addon {
+  background-color: #f9f0ff;
+  border-color: #d3adf7;
+  color: #722ed1;
+}
+
+.package-type-beta {
+  background-color: #fff7e6;
+  border-color: #ffd591;
+  color: #fa8c16;
+} 

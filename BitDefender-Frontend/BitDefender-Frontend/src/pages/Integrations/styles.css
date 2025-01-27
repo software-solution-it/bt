@@ -1,0 +1,19 @@
+.ant-table-wrapper {
+  margin-top: 16px;
+}
+
+.ant-card {
+  margin: 24px;
+}
+
+.ant-space {
+  margin-bottom: 16px;
+}
+
+.ant-switch {
+  min-width: 70px;
+}
+
+.ant-table-cell-ellipsis {
+  max-width: 300px;
+} 

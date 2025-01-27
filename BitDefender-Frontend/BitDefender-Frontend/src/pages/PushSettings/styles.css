@@ -1,0 +1,73 @@
+.push-settings-card {
+  margin: 24px;
+}
+
+.push-settings-card .ant-form {
+  max-width: 600px;
+}
+
+.push-settings-card .ant-form-item {
+  margin-bottom: 24px;
+}
+
+.stats-section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.stats-section h3 {
+  margin-bottom: 16px;
+  color: #1890ff;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.ant-alert {
+  margin-bottom: 0;
+}
+
+.ant-alert-message {
+  font-weight: 500;
+}
+
+.ant-alert-description {
+  font-size: 24px;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Status colors */
+.ant-switch-checked {
+  background-color: #52c41a !important;
+}
+
+.ant-alert-info {
+  background-color: #e6f7ff;
+  border-color: #91d5ff;
+}
+
+.ant-alert-success {
+  background-color: #f6ffed;
+  border-color: #b7eb8f;
+}
+
+.ant-alert-error {
+  background-color: #fff1f0;
+  border-color: #ffa39e;
+}
+
+/* Form layout improvements */
+.ant-form-item-label {
+  font-weight: 500;
+}
+
+.ant-select-multiple .ant-select-selection-item {
+  background-color: #f0f5ff;
+  border-color: #adc6ff;
+} 

@@ -1,0 +1,308 @@
+.container {
+  padding: 2rem;
+  background: linear-gradient(145deg, #f0f2f5 0%, #e6e9f0 100%);
+  min-height: 100vh;
+}
+
+.breadcrumb {
+  margin-bottom: 2rem;
+}
+
+.backButton {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #2563eb;
+  font-size: 0.95rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  background: white;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.backButton:hover {
+  transform: translateX(-4px);
+  background: #f8fafc;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.header {
+  background: white;
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+  margin-bottom: 2rem;
+}
+
+.headerContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.headerInfo {
+  flex: 1;
+}
+
+.machineTitle {
+  margin: 0;
+  font-size: 2rem;
+  color: #111827;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.machineId {
+  display: block;
+  margin-top: 0.5rem;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.statusBadge {
+  padding: 0.75rem 1.5rem;
+  border-radius: 24px;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.statusOnline {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.statusOffline {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1fr;
+}
+
+.card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.cardHeader h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #111827;
+  font-weight: 600;
+}
+
+.cardIcon {
+  font-size: 1.5rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #2563eb;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
+.infoItem {
+  padding: 1.5rem;
+  background: #f8fafc;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.infoItem:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+.infoLabel {
+  display: block;
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.infoValue {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #111827;
+  font-weight: 600;
+}
+
+.moduleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  padding: 2rem;
+}
+
+.moduleItem {
+  display: flex;
+  align-items: center;
+  padding: 1.25rem;
+  background: #f8fafc;
+  border-radius: 12px;
+  gap: 1rem;
+  transition: all 0.3s ease;
+}
+
+.moduleItem:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+.moduleIcon {
+  font-size: 1.5rem;
+  padding: 0.5rem;
+  border-radius: 10px;
+}
+
+.iconSuccess {
+  color: #16a34a;
+  background: #dcfce7;
+}
+
+.iconError {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.moduleName {
+  font-weight: 500;
+  color: #111827;
+}
+
+.policyAlert {
+  padding: 2rem;
+  border-radius: 12px;
+  margin: 2rem;
+}
+
+.policySuccess {
+  background: #f0fdf4;
+  border: 1px solid #dcfce7;
+}
+
+.policyWarning {
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+}
+
+.policyName {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  color: #111827;
+}
+
+.policyStatus {
+  margin: 0;
+  color: #6b7280;
+}
+
+.errorAlert {
+  background: #fee2e2;
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+}
+
+.errorContent {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.errorContent h3 {
+  color: #991b1b;
+  margin: 0 0 1rem 0;
+}
+
+.errorContent p {
+  color: #7f1d1d;
+  margin: 0 0 1.5rem 0;
+}
+
+.errorContent button {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.errorContent button:hover {
+  background: #b91c1c;
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding: 3rem;
+  }
+  
+  .grid {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .container {
+    background: linear-gradient(145deg, #1a1d23 0%, #141618 100%);
+  }
+
+  .header,
+  .card,
+  .backButton {
+    background: #1f2937;
+    color: #f3f4f6;
+  }
+
+  .machineTitle {
+    color: #f3f4f6;
+  }
+
+  .infoItem,
+  .moduleItem {
+    background: #1f2937;
+  }
+
+  .infoValue,
+  .moduleName {
+    color: #f3f4f6;
+  }
+
+  .cardHeader {
+    border-color: #374151;
+  }
+
+  .cardHeader h2 {
+    color: #f3f4f6;
+  }
+
+  .cardIcon {
+    background: #374151;
+  }
+}
