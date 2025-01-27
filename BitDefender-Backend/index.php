@@ -51,12 +51,7 @@ $params = [];
 
 if (!empty($jsonBody)) {
     $request = json_decode($jsonBody, true);
-    Logger::debug('Received JSON request', [
-        'raw' => $jsonBody,
-        'decoded' => $request,
-        'params' => $request['params'] ?? []
-    ]);
-    $params = $request;  // Passa o request completo, não apenas os params
+    $params = $request;
 }
 
 Logger::debug('Incoming request', [
@@ -252,6 +247,15 @@ if (count($uri) >= 1) {
         
         header('Content-Type: application/json');
         echo $response;
+
+        // Após processar a URI
+        Logger::debug('Route processing', [
+            'method' => $method,
+            'controller' => $controller,
+            'routePath' => $routePath,
+            'uri' => $uri,
+            'params' => $params
+        ]);
 
     } catch (\Exception $e) {
         Logger::error('Request handling failed', [

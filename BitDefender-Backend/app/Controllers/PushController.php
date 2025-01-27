@@ -58,24 +58,21 @@ class PushController extends Controller
                 'params' => $params
             ]);
 
-            // Se vier no formato JSON-RPC, extrai os params
-            if (isset($params['jsonrpc']) && isset($params['method'])) {
-                Logger::debug('JSON-RPC format detected', [
-                    'original' => $params,
-                    'extracted_params' => $params['params'] ?? []
-                ]);
-                $params = $params['params'] ?? [];
+            // Extrai os parâmetros do formato JSON-RPC
+            $requestParams = [];
+            if (isset($params['params'])) {
+                $requestParams = $params['params'];
             }
 
-            Logger::debug('Final params after processing', [
-                'params' => $params
+            Logger::debug('Extracted params', [
+                'requestParams' => $requestParams
             ]);
 
-            if (!isset($params['api_key_id'])) {
+            if (!isset($requestParams['api_key_id'])) {
                 throw new \Exception('API Key ID is required');
             }
 
-            $result = $this->pushService->getPushEventSettings($params);
+            $result = $this->pushService->getPushEventSettings($requestParams);
             
             return $this->jsonResponse([
                 'jsonrpc' => '2.0',
