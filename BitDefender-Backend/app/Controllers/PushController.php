@@ -58,7 +58,11 @@ class PushController extends Controller
                 'params' => $params
             ]);
 
-            $result = $this->pushService->getPushEventSettings();
+            if (!isset($params['api_key_id'])) {
+                throw new \Exception('API Key ID is required');
+            }
+
+            $result = $this->pushService->getPushEventSettings($params);
             
             return $this->jsonResponse([
                 'jsonrpc' => '2.0',
@@ -76,7 +80,7 @@ class PushController extends Controller
                 'jsonrpc' => '2.0',
                 'error' => [
                     'code' => -32603,
-                    'message' => 'Internal error',
+                    'message' => $e->getMessage(),
                     'data' => [
                         'details' => $e->getMessage()
                     ]

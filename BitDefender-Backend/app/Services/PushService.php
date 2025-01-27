@@ -90,34 +90,15 @@ class PushService extends Service
     private function makeRequest($method, $params = [], $requestId = null)
     {
         try {
-            // Inicializa client com ou sem API key
-            if (isset($params['api_key_id'])) {
-                $apiKeysModel = new ApiKeysModel();
-                $apiKey = $apiKeysModel->find($params['api_key_id']);
-                
-                if (!$apiKey || !$apiKey['is_active']) {
-                    throw new \Exception('Invalid or inactive API Key');
-                }
 
-                $this->initializeClient($apiKey['api_key']);
-            } else {
-                // Inicializa client sem autenticação
-                $this->client = new Client([
-                    'base_uri' => $this->baseUrl,
-                    'headers' => [
-                        'Content-Type' => 'application/json',
-                        'Accept' => 'application/json' 
-                    ],
-                    RequestOptions::VERIFY => false,
-                    RequestOptions::HTTP_ERRORS => false,
-                    RequestOptions::TIMEOUT => 30,
-                    RequestOptions::CONNECT_TIMEOUT => 30,
-                    'curl' => [
-                        CURLOPT_SSLVERSION => CURL_SSLVERSION_TLSv1_2,
-                        CURLOPT_SSL_CIPHER_LIST => 'TLSv1.2'
-                    ]
-                ]);
+            $apiKeysModel = new ApiKeysModel();
+            $apiKey = $apiKeysModel->find($params['api_key_id']);
+            
+            if (!$apiKey || !$apiKey['is_active']) {
+                throw new \Exception('Invalid or inactive API Key');
             }
+
+            $this->initializeClient($apiKey['api_key']);
 
             // Valida as configurações do serviço para setPushEventSettings
             if ($method === 'setPushEventSettings' && isset($params['serviceSettings'])) {
@@ -227,9 +208,13 @@ class PushService extends Service
         }
     }
 
-    public function getPushEventSettings($params = [])
+    public function getPushEventSettings($params)
     {
         try {
+            if (!isset($params['api_key_id'])) {
+                throw new \Exception('API Key ID is required');
+            }
+
             $apiResult = $this->makeRequest('getPushEventSettings', $params);
             if ($apiResult) {
                 // Sincroniza com o banco local

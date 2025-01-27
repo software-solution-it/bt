@@ -190,10 +190,10 @@ if (count($uri) >= 1) {
                 break;
 
             case 'push':
-                $router->addRoute('GET', 'push/getPushEventSettings', 'PushController', 'getPushEventSettings');
-                $router->addRoute('GET', 'push/getPushEventStats', 'PushController', 'getPushEventStats');
-                $router->addRoute('POST', 'push/sendTestPushEvent', 'PushController', 'sendTestPushEvent');
+                $router->addRoute('POST', 'push/getPushEventSettings', 'PushController', 'getPushEventSettings');
                 $router->addRoute('POST', 'push/setPushEventSettings', 'PushController', 'setPushEventSettings');
+                $router->addRoute('POST', 'push/sendTestPushEvent', 'PushController', 'sendTestPushEvent');
+                $router->addRoute('POST', 'push/getPushEventStats', 'PushController', 'getPushEventStats');
                 $router->addRoute('POST', 'push/resetPushEventStats', 'PushController', 'resetPushEventStats');
                 $routeRegistered = true;
                 break;
