@@ -1,0 +1,14 @@
+{
+    "name": "bitdefender/backend",
+    "description": "Backend for BitDefender project",
+    "type": "project",
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "require": {
+        "vlucas/phpdotenv": "*",
+        "guzzlehttp/guzzle": "^7.9"
+    }
+}
