@@ -54,14 +54,22 @@ class PushController extends Controller
     public function getPushEventSettings($params = [])
     {
         try {
-            Logger::debug('PushController::getPushEventSettings called', [
+            Logger::debug('PushController::getPushEventSettings raw params', [
                 'params' => $params
             ]);
 
-            // Verifica se veio no formato JSON-RPC
+            // Se vier no formato JSON-RPC, extrai os params
             if (isset($params['jsonrpc']) && isset($params['method'])) {
+                Logger::debug('JSON-RPC format detected', [
+                    'original' => $params,
+                    'extracted_params' => $params['params'] ?? []
+                ]);
                 $params = $params['params'] ?? [];
             }
+
+            Logger::debug('Final params after processing', [
+                'params' => $params
+            ]);
 
             if (!isset($params['api_key_id'])) {
                 throw new \Exception('API Key ID is required');

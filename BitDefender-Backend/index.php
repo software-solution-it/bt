@@ -51,7 +51,12 @@ $params = [];
 
 if (!empty($jsonBody)) {
     $request = json_decode($jsonBody, true);
-    $params = $request['params'] ?? [];
+    Logger::debug('Received JSON request', [
+        'raw' => $jsonBody,
+        'decoded' => $request,
+        'params' => $request['params'] ?? []
+    ]);
+    $params = $request;  // Passa o request completo, não apenas os params
 }
 
 Logger::debug('Incoming request', [
