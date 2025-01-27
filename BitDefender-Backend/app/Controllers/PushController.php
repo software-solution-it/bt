@@ -58,6 +58,11 @@ class PushController extends Controller
                 'params' => $params
             ]);
 
+            // Verifica se veio no formato JSON-RPC
+            if (isset($params['jsonrpc']) && isset($params['method'])) {
+                $params = $params['params'] ?? [];
+            }
+
             if (!isset($params['api_key_id'])) {
                 throw new \Exception('API Key ID is required');
             }
