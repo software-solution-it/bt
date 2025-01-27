@@ -90,18 +90,17 @@ class PushService extends Service
     private function makeRequest($method, $params = [], $requestId = null)
     {
         try {
-            if (!isset($params['api_key_id'])) {
-                throw new \Exception('API Key ID is required');
-            }
+            // Só valida API key se estiver presente nos parâmetros
+            if (isset($params['api_key_id'])) {
+                $apiKeysModel = new ApiKeysModel();
+                $apiKey = $apiKeysModel->find($params['api_key_id']);
+                
+                if (!$apiKey || !$apiKey['is_active']) {
+                    throw new \Exception('Invalid or inactive API Key');
+                }
 
-            $apiKeysModel = new ApiKeysModel();
-            $apiKey = $apiKeysModel->find($params['api_key_id']);
-            
-            if (!$apiKey || !$apiKey['is_active']) {
-                throw new \Exception('Invalid or inactive API Key');
+                $this->initializeClient($apiKey['api_key']);
             }
-
-            $this->initializeClient($apiKey['api_key']);
 
             // Valida as configurações do serviço para setPushEventSettings
             if ($method === 'setPushEventSettings' && isset($params['serviceSettings'])) {
@@ -211,10 +210,10 @@ class PushService extends Service
         }
     }
 
-    public function getPushEventSettings()
+    public function getPushEventSettings($params = [])
     {
         try {
-            $apiResult = $this->makeRequest('getPushEventSettings');
+            $apiResult = $this->makeRequest('getPushEventSettings', $params);
             if ($apiResult) {
                 // Sincroniza com o banco local
                 $this->pushModel->syncWithApi($apiResult);
