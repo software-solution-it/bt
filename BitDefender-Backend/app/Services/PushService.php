@@ -215,6 +215,19 @@ class PushService extends Service
                 throw new \Exception('API Key ID is required');
             }
 
+            // Inicializa o cliente com a API key, mas não passa o api_key_id para o request
+            $apiKeysModel = new ApiKeysModel();
+            $apiKey = $apiKeysModel->find($params['api_key_id']);
+            
+            if (!$apiKey || !$apiKey['is_active']) {
+                throw new \Exception('Invalid or inactive API Key');
+            }
+
+            $this->initializeClient($apiKey['api_key']);
+
+            // Remove api_key_id dos parâmetros antes de fazer a requisição
+            unset($params['api_key_id']);
+            
             $apiResult = $this->makeRequest('getPushEventSettings', $params);
             if ($apiResult) {
                 // Sincroniza com o banco local
