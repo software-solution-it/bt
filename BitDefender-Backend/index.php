@@ -31,7 +31,20 @@ $uri = trim($uri, '/');
 // Adiciona log para debug
 Logger::debug('Original URI', ['uri' => $uri]);
 
+// Remove o prefixo 'defender' se existir
+if (strpos($uri, 'defender/') === 0) {
+    $uri = substr($uri, strlen('defender/')); // Remove o prefixo 'defender/'
+}
+
+// Adiciona log após remoção do prefixo
+Logger::debug('URI after prefix removal', ['uri' => $uri]);
+
 $uri = explode('/', $uri);
+
+// Se a URI estiver vazia após remover o prefixo, use um array vazio
+if (empty($uri[0])) {
+    $uri = [];
+}
 
 $jsonBody = file_get_contents('php://input');
 $params = [];
