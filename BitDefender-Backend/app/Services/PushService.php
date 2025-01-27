@@ -90,6 +90,10 @@ class PushService extends Service
     private function makeRequest($method, $params = [], $requestId = null)
     {
         try {
+            // Se não for setPushEventSettings, verifica se tem api_key_id
+            if ($method !== 'setPushEventSettings' && !isset($params['api_key_id'])) {
+                throw new \Exception('API Key ID is required');
+            }
 
             $apiKeysModel = new ApiKeysModel();
             $apiKey = $apiKeysModel->find($params['api_key_id']);
@@ -100,20 +104,14 @@ class PushService extends Service
 
             $this->initializeClient($apiKey['api_key']);
 
-            // Valida as configurações do serviço para setPushEventSettings
-            if ($method === 'setPushEventSettings' && isset($params['serviceSettings'])) {
-                $this->validateServiceSettings($params['serviceSettings']);
-                
-                // Adiciona o header de autorização se não existir
-                if (!isset($params['serviceSettings']['authorization'])) {
-                    $params['serviceSettings']['authorization'] = 'Basic ' . base64_encode($apiKey['api_key'] . ':');
-                }
-            }
-    
+            // Remove api_key_id dos parâmetros antes de fazer a requisição à API
+            $requestParams = $params;
+            unset($requestParams['api_key_id']);
+
             $requestBody = [
                 'jsonrpc' => '2.0',
                 'method' => $method,
-                'params' => $params,
+                'params' => $requestParams,
                 'id' => $requestId ?? uniqid()
             ];
     
