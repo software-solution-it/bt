@@ -19,11 +19,60 @@ class PushController extends Controller
     public function setPushEventSettings($params)
     {
         try {
-            Logger::debug('PushController::setPushEventSettings called', [
-                'params' => $params
+            Logger::info('PushController::setPushEventSettings raw input', [
+                'raw_params' => $params,
+                'has_jsonrpc' => isset($params['jsonrpc']),
+                'has_method' => isset($params['method']),
+                'has_params' => isset($params['params'])
             ]);
 
-            $result = $this->pushService->setPushEventSettings($params);
+            // Se os parâmetros estiverem no formato JSON-RPC
+            $requestParams = [];
+            if (isset($params['params'])) {
+                $requestParams = $params['params'];
+                Logger::info('Extracted params from JSON-RPC', [
+                    'extracted' => $requestParams
+                ]);
+            } elseif (isset($params['api_key_id'])) {
+                $requestParams = $params;
+            }
+
+            Logger::info('Final processed params', [
+                'requestParams' => $requestParams
+            ]);
+
+            // Validações
+            if (!isset($requestParams['api_key_id'])) {
+                throw new \Exception('API Key ID is required');
+            }
+
+            if (!isset($requestParams['status'])) {
+                throw new \Exception('Status is required');
+            }
+
+            if (!isset($requestParams['serviceType'])) {
+                throw new \Exception('Service type is required');
+            }
+
+            // Validar serviceType
+            $allowedServiceTypes = ['jsonRPC', 'splunk', 'cef'];
+            if (!in_array($requestParams['serviceType'], $allowedServiceTypes)) {
+                throw new \Exception('Invalid service type. Allowed types are: ' . implode(', ', $allowedServiceTypes));
+            }
+
+            if (!isset($requestParams['serviceSettings']) || !isset($requestParams['serviceSettings']['url'])) {
+                throw new \Exception('Service URL is required');
+            }
+
+            if (!isset($requestParams['subscribeToEventTypes']) || !is_array($requestParams['subscribeToEventTypes'])) {
+                throw new \Exception('Subscribe to event types is required and must be an array');
+            }
+
+            // Converte api_key_id para número
+            $apiKeyId = intval($requestParams['api_key_id']);
+            $requestParams['api_key_id'] = $apiKeyId;
+
+            $result = $this->pushService->setPushEventSettings($requestParams);
             
             return $this->jsonResponse([
                 'jsonrpc' => '2.0',
@@ -41,7 +90,7 @@ class PushController extends Controller
                 'jsonrpc' => '2.0',
                 'error' => [
                     'code' => -32603,
-                    'message' => 'Internal error',
+                    'message' => $e->getMessage(),
                     'data' => [
                         'details' => $e->getMessage()
                     ]
@@ -54,25 +103,36 @@ class PushController extends Controller
     public function getPushEventSettings($params = [])
     {
         try {
-            Logger::debug('PushController::getPushEventSettings raw params', [
-                'params' => $params
+            Logger::info('PushController::getPushEventSettings received', [
+                'raw_params' => $params,
+                'has_params' => isset($params['params']),
+                'params_type' => gettype($params),
+                'full_request' => $params
             ]);
 
-            // Extrai os parâmetros do formato JSON-RPC
+            // Se os parâmetros estiverem no formato JSON-RPC
             $requestParams = [];
             if (isset($params['params'])) {
                 $requestParams = $params['params'];
+            } elseif (isset($params['api_key_id'])) {
+                $requestParams = $params;
             }
 
-            Logger::debug('Extracted params', [
-                'requestParams' => $requestParams
+            Logger::info('Processed params', [
+                'requestParams' => $requestParams,
+                'has_api_key' => isset($requestParams['api_key_id'])
             ]);
 
             if (!isset($requestParams['api_key_id'])) {
                 throw new \Exception('API Key ID is required');
             }
 
-            $result = $this->pushService->getPushEventSettings($requestParams);
+            // Converte api_key_id para número
+            $apiKeyId = intval($requestParams['api_key_id']);
+            
+            $result = $this->pushService->getPushEventSettings([
+                'api_key_id' => $apiKeyId
+            ]);
             
             return $this->jsonResponse([
                 'jsonrpc' => '2.0',
@@ -103,11 +163,48 @@ class PushController extends Controller
     public function sendTestPushEvent($params)
     {
         try {
-            Logger::debug('PushController::sendTestPushEvent called', [
-                'params' => $params
+            Logger::info('PushController::sendTestPushEvent raw input', [
+                'raw_params' => $params,
+                'has_jsonrpc' => isset($params['jsonrpc']),
+                'has_method' => isset($params['method']),
+                'has_params' => isset($params['params'])
             ]);
 
-            $result = $this->pushService->sendTestPushEvent($params);
+            // Se os parâmetros estiverem no formato JSON-RPC
+            $requestParams = [];
+            if (isset($params['params'])) {
+                $requestParams = $params['params'];
+                Logger::info('Extracted params from JSON-RPC', [
+                    'extracted' => $requestParams
+                ]);
+            } elseif (isset($params['api_key_id'])) {
+                $requestParams = $params;
+            }
+
+            Logger::info('Final processed params', [
+                'requestParams' => $requestParams
+            ]);
+
+            if (!isset($requestParams['api_key_id'])) {
+                throw new \Exception('API Key ID is required');
+            }
+
+            if (!isset($requestParams['eventType'])) {
+                throw new \Exception('Event type is required');
+            }
+
+            if (!isset($requestParams['data'])) {
+                throw new \Exception('Event data is required');
+            }
+
+            // Converte api_key_id para número
+            $apiKeyId = intval($requestParams['api_key_id']);
+            
+            $result = $this->pushService->sendTestPushEvent([
+                'api_key_id' => $apiKeyId,
+                'eventType' => $requestParams['eventType'],
+                'data' => $requestParams['data']
+            ]);
             
             return $this->jsonResponse([
                 'jsonrpc' => '2.0',
@@ -125,7 +222,7 @@ class PushController extends Controller
                 'jsonrpc' => '2.0',
                 'error' => [
                     'code' => -32603,
-                    'message' => 'Internal error',
+                    'message' => $e->getMessage(),
                     'data' => [
                         'details' => $e->getMessage()
                     ]

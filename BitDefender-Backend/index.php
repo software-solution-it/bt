@@ -51,6 +51,10 @@ $params = [];
 
 if (!empty($jsonBody)) {
     $request = json_decode($jsonBody, true);
+    Logger::debug('Request received', [
+        'raw_body' => $jsonBody,
+        'decoded' => $request
+    ]);
     $params = $request;
 }
 

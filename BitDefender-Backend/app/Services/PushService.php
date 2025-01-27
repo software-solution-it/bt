@@ -90,13 +90,26 @@ class PushService extends Service
     private function makeRequest($method, $params = [], $requestId = null)
     {
         try {
-            // Se não for setPushEventSettings, verifica se tem api_key_id
-            if ($method !== 'setPushEventSettings' && !isset($params['api_key_id'])) {
+            Logger::info('makeRequest input', [
+                'method' => $method,
+                'raw_params' => $params,
+                'has_api_key' => isset($params['api_key_id']),
+                'api_key_id' => $params['api_key_id'] ?? null,
+                'requestId' => $requestId
+            ]);
+
+            if (!isset($params['api_key_id'])) {
                 throw new \Exception('API Key ID is required');
             }
 
             $apiKeysModel = new ApiKeysModel();
             $apiKey = $apiKeysModel->find($params['api_key_id']);
+            
+            Logger::info('API Key lookup result', [
+                'api_key_exists' => !empty($apiKey),
+                'is_active' => $apiKey['is_active'] ?? false,
+                'api_key_id' => $params['api_key_id']
+            ]);
             
             if (!$apiKey || !$apiKey['is_active']) {
                 throw new \Exception('Invalid or inactive API Key');
@@ -115,7 +128,7 @@ class PushService extends Service
                 'id' => $requestId ?? uniqid()
             ];
     
-            Logger::debug("Making {$method} request", [
+            Logger::info('Making API request', [
                 'requestBody' => $requestBody
             ]);
     
@@ -213,7 +226,11 @@ class PushService extends Service
                 throw new \Exception('API Key ID is required');
             }
 
-            // Inicializa o cliente com a API key, mas não passa o api_key_id para o request
+            Logger::info('getPushEventSettings called', [
+                'params' => $params
+            ]);
+
+            // Inicializa o cliente com a API key
             $apiKeysModel = new ApiKeysModel();
             $apiKey = $apiKeysModel->find($params['api_key_id']);
             
@@ -223,12 +240,14 @@ class PushService extends Service
 
             $this->initializeClient($apiKey['api_key']);
 
-            // Remove api_key_id dos parâmetros antes de fazer a requisição
-            unset($params['api_key_id']);
-            
-            $apiResult = $this->makeRequest('getPushEventSettings', $params);
+            // Importante: Passar o api_key_id para o makeRequest
+            $apiResult = $this->makeRequest('getPushEventSettings', [
+                'api_key_id' => $params['api_key_id']
+            ]);
+
             if ($apiResult) {
-                // Sincroniza com o banco local
+                // Adiciona o api_key_id ao resultado antes de sincronizar
+                $apiResult['api_key_id'] = $params['api_key_id'];
                 $this->pushModel->syncWithApi($apiResult);
             }
             return $apiResult;
@@ -242,7 +261,53 @@ class PushService extends Service
 
     public function sendTestPushEvent($params)
     {
-        return $this->makeRequest('sendTestPushEvent', $params);
+        try {
+            if (!isset($params['api_key_id'])) {
+                throw new \Exception('API Key ID is required');
+            }
+
+            Logger::info('sendTestPushEvent called', [
+                'params' => $params
+            ]);
+
+            // Inicializa o cliente com a API key
+            $apiKeysModel = new ApiKeysModel();
+            $apiKey = $apiKeysModel->find($params['api_key_id']);
+            
+            if (!$apiKey || !$apiKey['is_active']) {
+                throw new \Exception('Invalid or inactive API Key');
+            }
+
+            $this->initializeClient($apiKey['api_key']);
+
+            // Prepara os parâmetros para a API
+            $requestParams = [
+                'api_key_id' => $params['api_key_id'],
+                'eventType' => $params['eventType'] ?? null,
+                'data' => $params['data'] ?? null
+            ];
+
+            if (!isset($requestParams['eventType'])) {
+                throw new \Exception('Event type is required');
+            }
+
+            if (!isset($requestParams['data'])) {
+                throw new \Exception('Event data is required');
+            }
+
+            Logger::info('Sending test event', [
+                'requestParams' => $requestParams
+            ]);
+
+            // Passa os parâmetros completos para o makeRequest
+            return $this->makeRequest('sendTestPushEvent', $requestParams);
+        } catch (\Exception $e) {
+            Logger::error('Failed to send test push event', [
+                'error' => $e->getMessage(),
+                'params' => $params
+            ]);
+            throw $e;
+        }
     }
 
     public function getPushEventStats()

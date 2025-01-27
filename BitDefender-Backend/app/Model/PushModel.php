@@ -240,7 +240,12 @@ class PushModel extends Model
                 return false;
             }
 
+            if (!isset($apiSettings['api_key_id'])) {
+                throw new \Exception('API Key ID is required for sync');
+            }
+
             $data = [
+                'api_key_id' => $apiSettings['api_key_id'],
                 'status' => (int)($apiSettings['status'] ?? 0),
                 'service_type' => $apiSettings['serviceType'] ?? 'webhook',
                 'url' => $apiSettings['serviceSettings']['url'] ?? '',
@@ -261,10 +266,13 @@ class PushModel extends Model
                 throw new \Exception('Service type is required');
             }
 
-            $existing = $this->db->query("SELECT id FROM {$this->table} LIMIT 1")->fetch();
+            // Busca configuração existente para esta api_key
+            $existing = $this->db->prepare("SELECT id FROM {$this->table} WHERE api_key_id = ? LIMIT 1");
+            $existing->execute([$data['api_key_id']]);
+            $existingRecord = $existing->fetch();
 
-            if ($existing) {
-                return $this->update($existing['id'], $data);
+            if ($existingRecord) {
+                return $this->update($existingRecord['id'], $data);
             } else {
                 return $this->create($data);
             }
