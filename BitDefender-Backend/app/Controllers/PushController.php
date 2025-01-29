@@ -26,23 +26,30 @@ class PushController extends Controller
                 'has_params' => isset($params['params'])
             ]);
 
-            // Se os parâmetros estiverem no formato JSON-RPC
-            $requestParams = [];
+            // Extract params correctly from the JSON-RPC format
+            $requestParams = $params;
+            
+            // If this is a JSON-RPC request, the actual params will be in params.params
             if (isset($params['params'])) {
                 $requestParams = $params['params'];
                 Logger::info('Extracted params from JSON-RPC', [
-                    'extracted' => $requestParams
+                    'extracted' => $requestParams,
+                    'has_api_key_id' => isset($requestParams['api_key_id'])
                 ]);
-            } elseif (isset($params['api_key_id'])) {
-                $requestParams = $params;
             }
 
             Logger::info('Final processed params', [
-                'requestParams' => $requestParams
+                'requestParams' => $requestParams,
+                'has_api_key_id' => isset($requestParams['api_key_id']),
+                'api_key_id_value' => $requestParams['api_key_id'] ?? 'not set'
             ]);
 
-            // Validações
+            // Validações básicas
             if (!isset($requestParams['api_key_id'])) {
+                Logger::error('API Key ID missing', [
+                    'requestParams' => $requestParams,
+                    'original_params' => $params
+                ]);
                 throw new \Exception('API Key ID is required');
             }
 
@@ -54,23 +61,30 @@ class PushController extends Controller
                 throw new \Exception('Service type is required');
             }
 
+            // Garante que serviceSettings existe
+            if (!isset($requestParams['serviceSettings'])) {
+                $requestParams['serviceSettings'] = [];
+            }
+
+            // Define valores padrão para serviceSettings
+            $requestParams['serviceSettings'] = array_merge([
+                'url' => '',
+                'requireValidSslCertificate' => true,
+                'authorization' => null
+            ], $requestParams['serviceSettings']);
+
             // Validar serviceType
             $allowedServiceTypes = ['jsonRPC', 'splunk', 'cef'];
             if (!in_array($requestParams['serviceType'], $allowedServiceTypes)) {
                 throw new \Exception('Invalid service type. Allowed types are: ' . implode(', ', $allowedServiceTypes));
             }
 
-            if (!isset($requestParams['serviceSettings']) || !isset($requestParams['serviceSettings']['url'])) {
-                throw new \Exception('Service URL is required');
-            }
-
             if (!isset($requestParams['subscribeToEventTypes']) || !is_array($requestParams['subscribeToEventTypes'])) {
                 throw new \Exception('Subscribe to event types is required and must be an array');
             }
 
-            // Converte api_key_id para número
-            $apiKeyId = intval($requestParams['api_key_id']);
-            $requestParams['api_key_id'] = $apiKeyId;
+            // Convert api_key_id to integer if it's a string
+            $requestParams['api_key_id'] = intval($requestParams['api_key_id']);
 
             $result = $this->pushService->setPushEventSettings($requestParams);
             

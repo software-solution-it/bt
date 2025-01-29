@@ -52,8 +52,13 @@ class PushService extends Service
         ]);
     }
 
-    private function validateServiceSettings($serviceSettings)
+    private function validateServiceSettings($serviceSettings, $serviceType, $apiKey)
     {
+        Logger::debug('Validating service settings', [
+            'serviceSettings' => $serviceSettings,
+            'serviceType' => $serviceType
+        ]);
+
         if (empty($serviceSettings['url'])) {
             throw new \Exception('Service URL is required');
         }
@@ -68,23 +73,21 @@ class PushService extends Service
             throw new \Exception('Service URL must use HTTPS protocol');
         }
 
-        // Adiciona o path se não existir
-        if (!isset($urlParts['path']) || empty($urlParts['path'])) {
-            $serviceSettings['url'] .= '/api/v1.0/jsonrpc/push';
-        }
-
         // Se for ngrok, ignora validação de TLS
         if (strpos($serviceSettings['url'], 'ngrok') !== false) {
             $serviceSettings['requireValidSslCertificate'] = false;
-            return true;
         }
 
-        // Para outras URLs, mantém a validação de TLS
-        if (!isset($serviceSettings['requireValidSslCertificate'])) {
-            $serviceSettings['requireValidSslCertificate'] = true;
-        }
+        // Define valores padrão
+        $serviceSettings['requireValidSslCertificate'] = 
+            $serviceSettings['requireValidSslCertificate'] ?? true;
 
-        return true;
+        // Retorna os campos necessários incluindo authorization
+        return [
+            'url' => $serviceSettings['url'],
+            'requireValidSslCertificate' => $serviceSettings['requireValidSslCertificate'],
+            'authorization' => $apiKey
+        ];
     }
 
     private function makeRequest($method, $params = [], $requestId = null)
@@ -117,14 +120,10 @@ class PushService extends Service
 
             $this->initializeClient($apiKey['api_key']);
 
-            // Remove api_key_id dos parâmetros antes de fazer a requisição à API
-            $requestParams = $params;
-            unset($requestParams['api_key_id']);
-
             $requestBody = [
                 'jsonrpc' => '2.0',
                 'method' => $method,
-                'params' => $requestParams,
+                'params' => $params['params'] ?? [],  // Define um array vazio como padrão
                 'id' => $requestId ?? uniqid()
             ];
     
@@ -179,39 +178,106 @@ class PushService extends Service
     public function setPushEventSettings($params)
     {
         try {
+            Logger::debug('setPushEventSettings called with params', [
+                'params' => $params
+            ]);
+
             if (!isset($params['api_key_id'])) {
                 throw new \Exception('API Key ID is required');
             }
 
+            // Get API Key for authorization header
             $apiKeysModel = new ApiKeysModel();
             $apiKey = $apiKeysModel->find($params['api_key_id']);
             
             if (!$apiKey || !$apiKey['is_active']) {
                 throw new \Exception('Invalid or inactive API Key');
             }
- 
-            $this->initializeClient($apiKey['api_key']);
 
-            // Validação básica dos parâmetros
-            if (!isset($params['status'])) {
-                throw new \Exception('Status parameter is required');
+            // Garante que serviceSettings existe e tem os campos necessários
+            if (!isset($params['serviceSettings'])) {
+                $params['serviceSettings'] = [];
             }
 
             if (!isset($params['serviceType'])) {
-                throw new \Exception('Service type parameter is required');
+                throw new \Exception('Service type is required');
             }
 
-            if (!isset($params['serviceSettings']) || !isset($params['serviceSettings']['url'])) {
-                throw new \Exception('Service URL is required');
+            // Define valores padrão para serviceSettings
+            $params['serviceSettings'] = array_merge([
+                'url' => '',
+                'requireValidSslCertificate' => true
+            ], $params['serviceSettings']);
+
+            // Valida as configurações do serviço e atualiza com os valores validados
+            $params['serviceSettings'] = $this->validateServiceSettings(
+                $params['serviceSettings'], 
+                $params['serviceType'],
+                $apiKey['api_key']  // Passa a API key para o método de validação
+            );
+
+            // Store api_key_id before preparing request params
+            $apiKeyId = $params['api_key_id'];
+
+            // Mapeamento dos eventos corretos conforme documentação
+            $validEvents = [
+                'modules',
+                'sva',
+                'registration',
+                'supa-update-status',
+                'av',
+                'aph',
+                'fw',
+                'avc',
+                'uc',
+                'dp',
+                'sva-load',
+                'task-status',
+                'exchange-malware',
+                'network-sandboxing',
+                'adcloud',
+                'exchange-user-credentials'
+            ];
+
+            // Verifica se subscribeToEventTypes já é um objeto
+            if (is_array($params['subscribeToEventTypes']) && !isset($params['subscribeToEventTypes'][0])) {
+                // É um objeto associativo, mantém como está
+                $subscribeToEventTypes = $params['subscribeToEventTypes'];
+            } else {
+                // É um array, converte para objeto
+                $subscribeToEventTypes = array_fill_keys($params['subscribeToEventTypes'], true);
             }
 
-            // Adiciona api_key_id aos dados
-            $params['serviceSettings']['api_key_id'] = $params['api_key_id'];
+            // Valida se os eventos são permitidos
+            $validSubscribeToEventTypes = array_intersect_key(
+                $subscribeToEventTypes, 
+                array_flip($validEvents)
+            );
 
-            return $this->makeRequest('setPushEventSettings', $params);
+            if (empty($validSubscribeToEventTypes)) {
+                throw new \Exception('No valid events specified in subscribeToEventTypes parameter');
+            }
+
+            // Prepare request params
+            $requestParams = [
+                'status' => $params['status'],
+                'serviceType' => $params['serviceType'],
+                'serviceSettings' => $params['serviceSettings'],
+                'subscribeToEventTypes' => $validSubscribeToEventTypes
+            ];
+
+            Logger::debug('Prepared request params', [
+                'requestParams' => $requestParams
+            ]);
+
+            // Make the request
+            return $this->makeRequest('setPushEventSettings', [
+                'api_key_id' => $apiKeyId,
+                'params' => $requestParams
+            ]);
             
         } catch (\Exception $e) {
-            Logger::error('Failed to set and sync push event settings', [
+            Logger::error('Failed to set push event settings', [
                 'error' => $e->getMessage(),
                 'params' => $params
             ]);
@@ -219,18 +285,19 @@ class PushService extends Service
         }
     }
 
-    public function getPushEventSettings($params)
+    public function getPushEventSettings($params = [])
     {
         try {
+            Logger::debug('getPushEventSettings called with params', [
+                'params' => $params
+            ]);
+
+            // Verifica se api_key_id existe
             if (!isset($params['api_key_id'])) {
                 throw new \Exception('API Key ID is required');
             }
 
-            Logger::info('getPushEventSettings called', [
-                'params' => $params
-            ]);
-
-            // Inicializa o cliente com a API key
+            // Get API Key for authorization header
             $apiKeysModel = new ApiKeysModel();
             $apiKey = $apiKeysModel->find($params['api_key_id']);
             
@@ -238,22 +305,22 @@ class PushService extends Service
                 throw new \Exception('Invalid or inactive API Key');
             }
 
-            $this->initializeClient($apiKey['api_key']);
-
-            // Importante: Passar o api_key_id para o makeRequest
-            $apiResult = $this->makeRequest('getPushEventSettings', [
+            // Make the request
+            $response = $this->makeRequest('getPushEventSettings', [
                 'api_key_id' => $params['api_key_id']
             ]);
 
-            if ($apiResult) {
-                // Adiciona o api_key_id ao resultado antes de sincronizar
-                $apiResult['api_key_id'] = $params['api_key_id'];
-                $this->pushModel->syncWithApi($apiResult);
+            // Se a resposta for bem sucedida, oculta o valor real da authorization
+            if (isset($response['result']['serviceSettings']['authorization'])) {
+                $response['result']['serviceSettings']['authorization'] = '********';
             }
-            return $apiResult;
+
+            return $response;
+
         } catch (\Exception $e) {
-            Logger::error('Failed to get and sync push event settings', [
-                'error' => $e->getMessage()
+            Logger::error('Failed to get push event settings', [
+                'error' => $e->getMessage(),
+                'params' => $params
             ]);
             throw $e;
         }
@@ -270,7 +337,7 @@ class PushService extends Service
                 'params' => $params
             ]);
 
-            // Inicializa o cliente com a API key
+            // Get API Key for authorization header
             $apiKeysModel = new ApiKeysModel();
             $apiKey = $apiKeysModel->find($params['api_key_id']);
             
@@ -278,20 +345,20 @@ class PushService extends Service
                 throw new \Exception('Invalid or inactive API Key');
             }
 
-            $this->initializeClient($apiKey['api_key']);
-
             // Prepara os parâmetros para a API
             $requestParams = [
                 'api_key_id' => $params['api_key_id'],
-                'eventType' => $params['eventType'] ?? null,
-                'data' => $params['data'] ?? null
+                'params' => [  // Adiciona um nível extra de 'params'
+                    'eventType' => $params['eventType'] ?? null,
+                    'data' => $params['data'] ?? null
+                ]
             ];
 
-            if (!isset($requestParams['eventType'])) {
+            if (!isset($requestParams['params']['eventType'])) {
                 throw new \Exception('Event type is required');
             }
 
-            if (!isset($requestParams['data'])) {
+            if (!isset($requestParams['params']['data'])) {
                 throw new \Exception('Event data is required');
             }
 

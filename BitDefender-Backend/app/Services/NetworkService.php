@@ -781,6 +781,20 @@ class NetworkService extends Service
     public function createScanTask($params)
     {
         try {
+            if (!isset($params['api_key_id'])) {
+                throw new \Exception('API Key ID is required');
+            }
+
+            // Inicializa o cliente com o token da API
+            $apiKeysModel = new ApiKeysModel();
+            $apiKey = $apiKeysModel->find($params['api_key_id']);
+            
+            if (!$apiKey || !$apiKey['is_active']) {
+                throw new \Exception('Invalid or inactive API Key');
+            }
+
+            $this->initializeClient($apiKey['api_key']);
+
             $requestBody = [
                 'jsonrpc' => '2.0',
                 'method' => 'createScanTask', 
@@ -802,11 +816,6 @@ class NetworkService extends Service
 
             $statusCode = $response->getStatusCode();
             $responseBody = $response->getBody()->getContents();
-
-            $response = $this->client->post('/api/v1.0/jsonrpc/network', [
-                RequestOptions::JSON => $requestBody
-            ]);
-
             $result = json_decode($responseBody, true);
 
             Logger::info('CreateScanTask response received', [

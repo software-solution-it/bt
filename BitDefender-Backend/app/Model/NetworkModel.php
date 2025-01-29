@@ -922,152 +922,79 @@ class NetworkModel extends Model
     public function getInventory($page = 1, $perPage = 100, $filters = [])
     {
         try {
+            Logger::debug('NetworkModel::getInventory called', [
+                'page' => $page,
+                'perPage' => $perPage,
+                'filters' => print_r($filters, true)
+            ]);
+
             $offset = ($page - 1) * $perPage;
             $params = [];
-            $whereConditions = ['is_deleted = 0'];
-    
+            
+            $query = "SELECT * FROM network_inventory WHERE 1=1";
+            
+            // Adiciona filtro de api_key_id se presente
             if (isset($filters['api_key_id'])) {
-                $whereConditions[] = 'api_key_id = ?';
-                $params[] = $filters['api_key_id'];
+                $query .= " AND api_key_id = :api_key_id";
+                $params[':api_key_id'] = $filters['api_key_id'];
             }
-    
-            $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
-    
-            // 1. Primeiro busca os dados básicos do network_inventory
-            $sql = "SELECT 
-                    item_id,
-                    api_key_id,
-                    name,
-                    parent_id,
-                    type,
-                    details,
-                    company_id,
-                    lastSeen,
-                    is_deleted,
-                    created_at,
-                    updated_at
-                FROM network_inventory
-                {$whereClause}
-                ORDER BY created_at DESC
-                LIMIT ? OFFSET ?";
-    
-            $stmt = $this->db->prepare($sql);
-            $params[] = $perPage;
-            $params[] = $offset;
-            $stmt->execute($params);
+
+            // Adiciona outros filtros se presentes
+            if (isset($filters['type'])) {
+                $query .= " AND type = :type";
+                $params[':type'] = $filters['type'];
+            }
+
+            if (isset($filters['status'])) {
+                $query .= " AND status = :status";
+                $params[':status'] = $filters['status'];
+            }
+
+            // Adiciona paginação
+            $query .= " LIMIT :offset, :limit";
+            $params[':offset'] = $offset;
+            $params[':limit'] = $perPage;
+
+            Logger::debug('Executing inventory query', [
+                'query' => $query,
+                'params' => print_r($params, true)
+            ]);
+
+            $stmt = $this->db->prepare($query);
+            
+            // Bind cada parâmetro individualmente
+            foreach ($params as $key => $value) {
+                if ($key === ':offset' || $key === ':limit') {
+                    $stmt->bindValue($key, $value, \PDO::PARAM_INT);
+                } else {
+                    $stmt->bindValue($key, $value);
+                }
+            }
+
+            $stmt->execute();
             $items = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-    
-            if (!empty($items)) {
-                // Coleta todos os IDs para buscar dados relacionados
-                $itemIds = array_column($items, 'item_id');
-                $placeholders = str_repeat('?,', count($itemIds) - 1) . '?';
-    
-                // 2. Busca dados dos endpoints
-                $sqlEndpoints = "SELECT 
-                    endpoint_id,
-                    group_id,
-                    is_managed,
-                    status,
-                    ip_address,
-                    operating_system,
-                    operating_system_version,
-                    label,
-                    last_seen,
-                    machine_type,
-                    policy_id,
-                    policy_applied,
-                    malware_status,
-                    agent_info,
-                    state,
-                    modules,
-                    managed_with_best,
-                    risk_score,
-                    fqdn,
-                    macs,
-                    ssid
-                FROM endpoints 
-                WHERE endpoint_id IN ($placeholders)";
-    
-                $stmtEndpoints = $this->db->prepare($sqlEndpoints);
-                $stmtEndpoints->execute($itemIds);
-                $endpoints = $stmtEndpoints->fetchAll(\PDO::FETCH_ASSOC);
-                $endpointsMap = array_column($endpoints, null, 'endpoint_id');
-    
-                // 3. Busca políticas relacionadas
-                $policyIds = array_unique(array_column($endpoints, 'policy_id'));
-                if (!empty($policyIds)) {
-                    $policyPlaceholders = str_repeat('?,', count($policyIds) - 1) . '?';
-                    $sqlPolicies = "SELECT id, name, settings FROM policies WHERE id IN ($policyPlaceholders)";
-                    $stmtPolicies = $this->db->prepare($sqlPolicies);
-                    $stmtPolicies->execute($policyIds);
-                    $policies = $stmtPolicies->fetchAll(\PDO::FETCH_ASSOC);
-                    $policiesMap = array_column($policies, null, 'id');
-                }
-    
-                // Mescla os dados
-                foreach ($items as &$item) {
-                    $endpoint = $endpointsMap[$item['item_id']] ?? null;
-                    
-                    // Processa os campos JSON
-                    $networkDetails = is_string($item['details']) ? 
-                        json_decode($item['details'], true) : 
-                        ($item['details'] ?? []);
-    
-                    $details = [
-                        'label' => $endpoint['label'] ?? '',
-                        'fqdn' => $endpoint['fqdn'] ?? '',
-                        'groupId' => $endpoint['group_id'] ?? '',
-                        'isManaged' => (bool)($endpoint['is_managed'] ?? false),
-                        'machineType' => (int)($endpoint['machine_type'] ?? 0),
-                        'operatingSystemVersion' => $endpoint['operating_system_version'] ?? '',
-                        'ip' => $endpoint['ip_address'] ?? '',
-                        'macs' => json_decode($endpoint['macs'] ?? '[]', true),
-                        'ssid' => $endpoint['ssid'] ?? '',
-                        'managedWithBest' => (bool)($endpoint['managed_with_best'] ?? false),
-                        'modules' => json_decode($endpoint['modules'] ?? '[]', true),
-                        'status' => $endpoint['status'] ?? null,
-                        'malware_status' => json_decode($endpoint['malware_status'] ?? 'null', true),
-                        'agent_info' => json_decode($endpoint['agent_info'] ?? 'null', true),
-                        'state' => (int)($endpoint['state'] ?? 0),
-                        'risk_score' => json_decode($endpoint['risk_score'] ?? 'null', true)
-                    ];
-    
-                    if ($endpoint && isset($endpoint['policy_id']) && isset($policiesMap[$endpoint['policy_id']])) {
-                        $policy = $policiesMap[$endpoint['policy_id']];
-                        $details['policy'] = [
-                            'id' => $endpoint['policy_id'],
-                            'name' => $policy['name'],
-                            'applied' => (bool)$endpoint['policy_applied'],
-                            'settings' => json_decode($policy['settings'] ?? '{}', true)
-                        ];
-                    }
-    
-                    // Mescla com network_details
-                    if (!empty($networkDetails)) {
-                        $details = array_merge($networkDetails, $details);
-                    }
-    
-                    $item['details'] = $details;
-                    $item['lastSeen'] = $item['lastSeen'] ? date('c', strtotime($item['lastSeen'])) : null;
-                    $item['api_key_id'] = (int)$item['api_key_id'];
-                    $item['is_deleted'] = (int)$item['is_deleted'];
-                }
-            }
-    
+
             // Conta total de registros
-            $sqlCount = "SELECT COUNT(*) as total FROM network_inventory {$whereClause}";
-            $stmtCount = $this->db->prepare($sqlCount);
-            $stmtCount->execute(array_slice($params, 0, -2));
-            $total = $stmtCount->fetch(\PDO::FETCH_ASSOC)['total'];
-    
+            $countQuery = "SELECT COUNT(*) as total FROM network_inventory WHERE 1=1";
+            if (isset($filters['api_key_id'])) {
+                $countQuery .= " AND api_key_id = :api_key_id";
+            }
+            
+            $countStmt = $this->db->prepare($countQuery);
+            if (isset($filters['api_key_id'])) {
+                $countStmt->bindValue(':api_key_id', $filters['api_key_id']);
+            }
+            $countStmt->execute();
+            $totalCount = $countStmt->fetch(\PDO::FETCH_ASSOC)['total'];
+
             return [
                 'items' => $items,
-                'total' => (int)$total,
+                'total' => (int)$totalCount,
                 'page' => (int)$page,
                 'perPage' => (int)$perPage,
-                'pagesCount' => ceil($total / $perPage)
+                'pagesCount' => ceil($totalCount / $perPage)
             ];
-    
+
         } catch (\Exception $e) {
             Logger::error('Failed to get inventory', [
                 'error' => $e->getMessage(),
@@ -1291,6 +1218,27 @@ class NetworkModel extends Model
         } catch (\PDOException $e) {
             Logger::error('Failed to get custom groups', [
                 'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+
+    public function findEndpoint($endpointId)
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM {$this->table} WHERE endpoint_id = ?");
+            $stmt->execute([$endpointId]);
+            $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            if ($result && isset($result['malware_status']) && is_string($result['malware_status'])) {
+                $result['malware_status'] = json_decode($result['malware_status'], true);
+            }
+
+            return $result;
+        } catch (\PDOException $e) {
+            Logger::error('Failed to find endpoint', [
+                'error' => $e->getMessage(),
+                'endpoint_id' => $endpointId
             ]);
             throw $e;
         }

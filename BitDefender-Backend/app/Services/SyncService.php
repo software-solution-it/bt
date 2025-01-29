@@ -144,12 +144,7 @@ class SyncService extends Service
                 'page' => 1,
                 'perPage' => 100,
                 'filters' => [
-                    'type' => [
-                        'computers' => true
-                    ],
-                    'depth' => [
-                        'allItemsRecursively' => true
-                    ]
+                    'api_key_id' => $params['api_key_id']
                 ]
             ]);
             Logger::info('Network inventory initial data received', [

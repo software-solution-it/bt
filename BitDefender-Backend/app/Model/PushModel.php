@@ -244,6 +244,11 @@ class PushModel extends Model
                 throw new \Exception('API Key ID is required for sync');
             }
 
+            // Garante que serviceSettings existe
+            if (!isset($apiSettings['serviceSettings'])) {
+                $apiSettings['serviceSettings'] = [];
+            }
+
             $data = [
                 'api_key_id' => $apiSettings['api_key_id'],
                 'status' => (int)($apiSettings['status'] ?? 0),

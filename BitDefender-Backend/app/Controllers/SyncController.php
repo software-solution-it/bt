@@ -23,7 +23,7 @@ class SyncController extends Controller
                 'params' => $params
             ]);
 
-            // Garantir que api_key_id está presente
+            // Verifique se o api_key_id está presente
             if (!isset($params['api_key_id'])) {
                 throw new \Exception('API Key ID is required');
             }

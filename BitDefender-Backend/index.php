@@ -31,7 +31,7 @@ $uri = trim($uri, '/');
 // Adiciona log para debug
 Logger::debug('Original URI', ['uri' => $uri]);
 
-// Remove o prefixo 'defender' se existir
+// Remove o prefixo 'defender' se existir, mas não obrigatório
 if (strpos($uri, 'defender/') === 0) {
     $uri = substr($uri, strlen('defender/')); // Remove o prefixo 'defender/'
 }
@@ -51,11 +51,18 @@ $params = [];
 
 if (!empty($jsonBody)) {
     $request = json_decode($jsonBody, true);
-    Logger::debug('Request received', [
+    Logger::debug('JSON body parsing', [
         'raw_body' => $jsonBody,
-        'decoded' => $request
+        'decoded' => $request,
+        'json_last_error' => json_last_error(),
+        'json_last_error_msg' => json_last_error_msg()
     ]);
-    $params = $request;
+    
+    if ($request === null && json_last_error() !== JSON_ERROR_NONE) {
+        throw new \Exception('Invalid JSON: ' . json_last_error_msg());
+    }
+    
+    $params = $request['params'] ?? [];
 }
 
 Logger::debug('Request received', [
@@ -76,6 +83,13 @@ if (count($uri) >= 1) {
     $routePath = implode('/', $uri);
     
     try {
+        // Add debug log for request body
+        Logger::debug('Request body received', [
+            'raw_body' => $jsonBody,
+            'decoded_params' => $params,
+            'request_uri' => $_SERVER['REQUEST_URI'],
+            'method' => $_SERVER['REQUEST_METHOD']
+        ]);
 
         $controllerMap = [
             'machines' => 'Machine',
@@ -231,7 +245,7 @@ if (count($uri) >= 1) {
                 break;
 
             case 'webhook':
-                $router->addRoute('POST', 'webhook/events', 'WebhookController', 'addEvents');
+                $router->addRoute('POST', 'webhook/addEvents', 'WebhookController', 'addEvents');
                 $routeRegistered = true;
                 break;
 
@@ -256,11 +270,17 @@ if (count($uri) >= 1) {
             'method' => $method,
             'controller' => $controller,
             'routePath' => $routePath,
-            'params' => $params
+            'params' => $params,
+            'decoded_body' => json_decode($jsonBody, true)
         ]);
 
         $response = $router->handleRequest($method, $routePath, $params);
         
+        // Add debug log for response
+        Logger::debug('Response being sent', [
+            'response' => $response
+        ]);
+
         header('Content-Type: application/json');
         echo $response;
 
