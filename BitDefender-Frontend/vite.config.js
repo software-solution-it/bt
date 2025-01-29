@@ -8,7 +8,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '^/auth/|^/api/': {  // Apenas rotas que começam com /auth ou /api
-        target: 'http://localhost:8080',
+        target: 'https://api-sd.m3solutions.net.br',
         changeOrigin: true,
         secure: false,
         configure: (proxy, options) => {
