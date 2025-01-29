@@ -1,5 +1,5 @@
 <?php
-header('Access-Control-Allow-Origin: http://localhost:3000');
+header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Access-Control-Allow-Credentials: true');
@@ -31,13 +31,11 @@ $uri = trim($uri, '/');
 // Adiciona log para debug
 Logger::debug('Original URI', ['uri' => $uri]);
 
-// Remove o prefixo 'defender' se existir, mas não obrigatório
-if (strpos($uri, 'defender/') === 0) {
-    $uri = substr($uri, strlen('defender/')); // Remove o prefixo 'defender/'
-}
-
 // Adiciona log após remoção do prefixo
-Logger::debug('URI after prefix removal', ['uri' => $uri]);
+Logger::info('URI after prefix removal', ['uri' => $uri]);
+
+// Adiciona log do método HTTP
+Logger::info('Request method', ['method' => $method]);
 
 $uri = explode('/', $uri);
 
@@ -62,7 +60,12 @@ if (!empty($jsonBody)) {
         throw new \Exception('Invalid JSON: ' . json_last_error_msg());
     }
     
-    $params = $request['params'] ?? [];
+    $params = is_array($request) ? ($request['params'] ?? $request) : [];
+    
+    Logger::debug('Parsed params', [
+        'params' => $params,
+        'request' => $request
+    ]);
 }
 
 Logger::debug('Request received', [
@@ -128,7 +131,7 @@ if (count($uri) >= 1) {
                 break;
 
             case 'sync':
-                $router->addRoute('POST', 'sync/all', 'SyncController', 'syncAll');
+                $router->addRoute('POST', 'sync/syncAll', 'SyncController', 'syncAll');
                 $router->addRoute('POST', 'sync/accounts/filter', 'SyncController', 'getFilteredAccounts');
                 $router->addRoute('POST', 'sync/companies/filter', 'SyncController', 'getFilteredCompanies');
                 $router->addRoute('POST', 'sync/incidents/filter', 'SyncController', 'getFilteredIncidents');
@@ -246,6 +249,14 @@ if (count($uri) >= 1) {
 
             case 'webhook':
                 $router->addRoute('POST', 'webhook/addEvents', 'WebhookController', 'addEvents');
+                $routeRegistered = true;
+                break;
+
+            case 'auth':
+                $router->addRoute('POST', 'auth/login', 'AuthController', 'login');
+                $router->addRoute('POST', 'auth/logout', 'AuthController', 'logout');
+                $router->addRoute('GET', 'auth/test', 'AuthController', 'testAuth');
+                $router->addRoute('POST', 'auth/create-default-user', 'AuthController', 'createDefaultUser');
                 $routeRegistered = true;
                 break;
 

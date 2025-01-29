@@ -8,56 +8,82 @@ const AuthContext = createContext({});
 export function AuthProvider({ children }) {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-
-    if (storedUser && token) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+    checkAuth();
   }, []);
 
-  const login = async (credentials) => {
+  const checkAuth = async () => {
     try {
-      console.log('Tentando login com:', credentials); // Debug
-      const response = await authService.login(credentials);
-      console.log('Resposta do login:', response); // Debug
-      
-      if (response.success) {
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
-        setUser(response.user);
-        
-        message.success('Login realizado com sucesso!');
-        console.log('Redirecionando para dashboard...'); // Debug
-        navigate('/dashboard');
-        return { success: true };
-      } else {
-        throw new Error('Login falhou');
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        const profile = await authService.getProfile();
+        if (profile.success) {
+          setUser(profile.user);
+          setIsAuthenticated(true);
+        }
       }
     } catch (error) {
-      console.error('Erro no login:', error); // Debug
-      message.error(error.message || 'Credenciais inválidas');
-      return { success: false, error };
+      console.error('Auth check failed:', error);
+      setUser(null);
+      setIsAuthenticated(false);
+      localStorage.removeItem('auth_token');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-    navigate('/login');
-    message.success('Logout realizado com sucesso!');
+  const login = async (credentials) => {
+    try {
+      console.log('Tentando login com:', credentials);
+      const response = await authService.login(credentials);
+      console.log('Resposta do login:', response);
+      
+      if (response.success) {
+        setUser(response.data.user);
+        setIsAuthenticated(true);
+        
+        navigate('/dashboard');
+        return { success: true };
+      } else {
+        return { 
+          success: false, 
+          error: response.error || 'Login falhou'
+        };
+      }
+    } catch (error) {
+      console.error('Erro no login:', error);
+      setUser(null);
+      setIsAuthenticated(false);
+      return { 
+        success: false, 
+        error: typeof error === 'string' ? error : error.message || 'Erro no login'
+      };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authService.logout();
+      setUser(null);
+      setIsAuthenticated(false);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('auth_token');
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const value = {
     user,
     login,
     logout,
-    isAuthenticated: !!user
+    isAuthenticated,
+    loading
   };
 
   if (loading) {
@@ -66,7 +92,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 }

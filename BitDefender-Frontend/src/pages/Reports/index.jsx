@@ -16,7 +16,6 @@ export default function Reports() {
       setReports(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching reports:', error);
-      message.error('Erro ao carregar relatórios');
       setReports([]);
     } finally {
       setLoading(false);
@@ -48,7 +47,6 @@ export default function Reports() {
       document.body.removeChild(link);
     } catch (error) {
       console.error('Error downloading report:', error);
-      message.error('Erro ao baixar relatório');
     }
   };
 

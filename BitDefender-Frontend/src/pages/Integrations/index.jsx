@@ -16,7 +16,6 @@ export default function Integrations() {
       setIntegrations(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching integrations:', error);
-      message.error('Erro ao carregar integrações');
       setIntegrations([]);
     } finally {
       setLoading(false);

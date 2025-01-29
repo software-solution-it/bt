@@ -30,7 +30,6 @@ export default function PushSettings() {
       }
     } catch (error) {
       console.error('Error fetching push settings:', error);
-      message.error('Erro ao carregar configurações de push');
     } finally {
       setLoading(false);
     }
@@ -54,11 +53,9 @@ export default function PushSettings() {
       };
 
       await syncService.syncAll(); // Sincroniza as configurações
-      message.success('Configurações salvas com sucesso!');
       fetchSettings(); // Recarrega as configurações
     } catch (error) {
       console.error('Error saving push settings:', error);
-      message.error('Erro ao salvar configurações');
     } finally {
       setLoading(false);
     }

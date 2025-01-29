@@ -4,11 +4,15 @@ namespace App\Model;
 
 use App\Core\Model;
 use App\Core\Logger;
+use GuzzleHttp\Client;
 
 class MachineModel extends Model
 {
     protected $table = 'machines';
     protected $primaryKey = 'machine_id';
+
+    private $cache = [];
+    private $cacheExpiry = 300; // 5 minutos de cache
 
     public function __construct()
     {
@@ -42,7 +46,18 @@ class MachineModel extends Model
                 last_seen DATETIME,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_machine (machine_id, api_key_id)
+                UNIQUE KEY unique_machine (machine_id, api_key_id),
+                INDEX idx_api_key (api_key_id),
+                INDEX idx_machine_id (machine_id),
+                INDEX idx_company (company_id),
+                INDEX idx_name (name),
+                INDEX idx_ip (ip),
+                INDEX idx_last_seen (last_seen),
+                INDEX idx_state (state),
+                INDEX idx_policy (policy_id),
+                INDEX idx_type (type),
+                INDEX idx_created (created_at),
+                INDEX idx_updated (updated_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
             $this->db->exec($sql);
@@ -232,17 +247,56 @@ class MachineModel extends Model
                 },
                 
                 'endpoints' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM endpoints WHERE api_key_id = ?";
+                    // Primeiro, busca os endpoints
+                    $query = "SELECT e.*, 
+                        (SELECT JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'id', w.id,
+                                'endpoint_id', w.endpoint_id,
+                                'event_type', w.event_type,
+                                'event_data', w.event_data,
+                                'severity', w.severity,
+                                'status', w.status,
+                                'computer_name', w.computer_name,
+                                'computer_ip', w.computer_ip,
+                                'created_at', w.created_at,
+                                'processed_at', w.processed_at,
+                                'error_message', w.error_message
+                            )
+                        )
+                        FROM webhook_events w 
+                        WHERE w.endpoint_id = e.endpoint_id
+                        AND w.api_key_id = e.api_key_id
+                        ORDER BY w.created_at DESC
+                        LIMIT 100) as webhook_events
+                    FROM endpoints e 
+                    WHERE e.api_key_id = ?";
+                    
                     $params = [$apiKeyId];
                     
                     if (isset($filters['endpoint_status'])) {
-                        $query .= " AND status = ?";
+                        $query .= " AND e.status = ?";
                         $params[] = $filters['endpoint_status'];
                     }
                     
+                    Logger::debug('Executing endpoints query', [
+                        'api_key_id' => $apiKeyId,
+                        'has_status_filter' => isset($filters['endpoint_status'])
+                    ]);
+
                     $stmt = $this->db->prepare($query);
                     $stmt->execute($params);
-                    return $stmt->fetchAll();
+                    $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+                    // Decodifica os eventos do webhook
+                    return array_map(function($row) {
+                        if (isset($row['webhook_events']) && is_string($row['webhook_events'])) {
+                            $row['webhook_events'] = json_decode($row['webhook_events'], true) ?? [];
+                        } else {
+                            $row['webhook_events'] = [];
+                        }
+                        return $row;
+                    }, $results);
                 },
                 
                 'licenses' => function() use ($apiKeyId, $filters) {
@@ -280,22 +334,55 @@ class MachineModel extends Model
                 },
                 
                 'machines' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM machines WHERE api_key_id = ?";
+                    $query = "SELECT m.*, 
+                        (SELECT JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'id', w.id,
+                                'endpoint_id', w.endpoint_id,
+                                'event_type', w.event_type,
+                                'event_data', w.event_data,
+                                'severity', w.severity,
+                                'status', w.status,
+                                'computer_name', w.computer_name,
+                                'computer_ip', w.computer_ip,
+                                'created_at', w.created_at,
+                                'processed_at', w.processed_at,
+                                'error_message', w.error_message
+                            )
+                        )
+                        FROM webhook_events w 
+                        WHERE w.computer_name COLLATE utf8mb4_unicode_ci = m.name COLLATE utf8mb4_unicode_ci
+                        AND w.api_key_id = m.api_key_id
+                        ORDER BY w.created_at DESC
+                        LIMIT 100) as webhook_events
+                    FROM machines m 
+                    WHERE m.api_key_id = ?";
+                    
                     $params = [$apiKeyId];
                     
                     if (isset($filters['machine_status'])) {
-                        $query .= " AND status = ?";
+                        $query .= " AND m.status = ?";
                         $params[] = $filters['machine_status'];
                     }
                     
                     if (isset($filters['machine_name'])) {
-                        $query .= " AND name LIKE ?";
+                        $query .= " AND m.name LIKE ?";
                         $params[] = "%{$filters['machine_name']}%";
                     }
                     
                     $stmt = $this->db->prepare($query);
                     $stmt->execute($params);
-                    return $stmt->fetchAll();
+                    $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+                    // Decodifica os eventos do webhook
+                    return array_map(function($row) {
+                        if (isset($row['webhook_events']) && is_string($row['webhook_events'])) {
+                            $row['webhook_events'] = json_decode($row['webhook_events'], true) ?? [];
+                        } else {
+                            $row['webhook_events'] = [];
+                        }
+                        return $row;
+                    }, $results);
                 },
                 
                 'packages' => function() use ($apiKeyId, $filters) {
@@ -411,5 +498,66 @@ class MachineModel extends Model
             }
             return $row;
         }, $rows);
+    }
+
+    public function getInventory($apiKey, $type = 'endpoints')
+    {
+        $cacheKey = "inventory_{$apiKey}_{$type}";
+        
+        // Verifica se há cache válido
+        if (isset($this->cache[$cacheKey]) && 
+            (time() - $this->cache[$cacheKey]['time'] < $this->cacheExpiry)) {
+            return $this->cache[$cacheKey]['data'];
+        }
+
+        try {
+            $client = new Client([
+                'base_uri' => getenv('BITDEFENDER_API_URL'),
+                'timeout' => 10,
+                'headers' => [
+                    'Authorization' => $apiKey
+                ]
+            ]);
+
+            // Otimiza a requisição especificando apenas os campos necessários
+            $params = [
+                'query' => [
+                    'fields' => $this->getRequiredFields($type),
+                    'pageSize' => 100, // Limita o número de resultados
+                    'pageNumber' => 1
+                ]
+            ];
+
+            $response = $client->get("/api/v1.0/jsonrpc/inventory", $params);
+            $result = json_decode($response->getBody(), true);
+
+            // Armazena no cache
+            $this->cache[$cacheKey] = [
+                'time' => time(),
+                'data' => $result
+            ];
+
+            return $result;
+        } catch (Exception $e) {
+            Logger::error('Error getting inventory', [
+                'error' => $e->getMessage(),
+                'apiKey' => substr($apiKey, 0, 10) . '...'
+            ]);
+            throw $e;
+        }
+    }
+
+    private function getRequiredFields($type)
+    {
+        switch ($type) {
+            case 'endpoints':
+                return 'id,name,label,ip,os,webhook_events';
+            case 'accounts':
+                return 'id,email,full_name,role,language,timezone';
+            case 'licenses':
+                return 'id,license_key,expiry_date,updated_at';
+            default:
+                return '*';
+        }
     }
 }

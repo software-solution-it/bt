@@ -1,50 +1,34 @@
 import { useEffect, useState } from 'react';
-import { Table, Card, Button, Input, Space, Tag, Tooltip, message, Select } from 'antd';
-import { SyncOutlined, SearchOutlined } from '@ant-design/icons';
+import { Table, Card, Input, Space, Tag, Tooltip, message } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
 import { syncService } from '../../services/sync.service';
 import './styles.css';
 
 export default function Licenses() {
   const [loading, setLoading] = useState(false);
   const [licenses, setLicenses] = useState([]);
-  const [apiKeys, setApiKeys] = useState([]);
-  const [selectedApiKey, setSelectedApiKey] = useState(null);
   const [filters, setFilters] = useState({});
 
   useEffect(() => {
-    fetchApiKeys();
-  }, []);
-
-  useEffect(() => {
-    if (selectedApiKey) {
+    const savedApiKey = sessionStorage.getItem('selectedApiKey');
+    if (savedApiKey) {
       fetchLicenses();
     }
-  }, [selectedApiKey]);
-
-  const fetchApiKeys = async () => {
-    try {
-      const keys = await syncService.getApiKeys();
-      setApiKeys(keys);
-      if (keys.length > 0) {
-        setSelectedApiKey(keys[0].id);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar chaves API:', error);
-      message.error('Erro ao carregar chaves API');
-    }
-  };
+  }, []);
 
   const fetchLicenses = async () => {
-    if (!selectedApiKey) return;
+    const savedApiKey = sessionStorage.getItem('selectedApiKey');
+    if (!savedApiKey) {
+      return;
+    }
 
     try {
       setLoading(true);
-      const response = await syncService.getMachineInventory(selectedApiKey, 'licenses');
+      const response = await syncService.getMachineInventory(Number(savedApiKey), 'licenses');
       const licenses = response.result.items || [];
       setLicenses(licenses);
     } catch (error) {
       console.error('Erro ao carregar licenças:', error);
-      message.error('Erro ao carregar licenças');
       setLicenses([]);
     } finally {
       setLoading(false);
@@ -180,32 +164,12 @@ export default function Licenses() {
       title="Licenças"
       extra={
         <Space>
-          <Select
-            placeholder="Selecione uma chave API"
-            value={selectedApiKey}
-            onChange={setSelectedApiKey}
-            style={{ width: 200 }}
-          >
-            {apiKeys.map(key => (
-              <Select.Option key={key.id} value={key.id}>
-                {key.name}
-              </Select.Option>
-            ))}
-          </Select>
           <Input.Search
             placeholder="Buscar por chave"
             allowClear
             onSearch={handleSearch}
             style={{ width: 200 }}
           />
-          <Button
-            type="primary"
-            icon={<SyncOutlined spin={loading} />}
-            onClick={fetchLicenses}
-            loading={loading}
-          >
-            Sincronizar
-          </Button>
         </Space>
       }
     >

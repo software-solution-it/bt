@@ -16,7 +16,6 @@ export default function Companies() {
       setCompanies(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching companies:', error);
-      message.error('Erro ao carregar empresas');
       setCompanies([]);
     } finally {
       setLoading(false);

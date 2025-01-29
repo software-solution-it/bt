@@ -2,6 +2,15 @@
   padding: 2rem;
   background: linear-gradient(145deg, #f0f2f5 0%, #e6e9f0 100%);
   min-height: 100vh;
+  overflow-y: auto;
+  max-height: 100vh;
+}
+
+.mainContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  flex: 1;
 }
 
 .breadcrumb {
@@ -93,6 +102,8 @@
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
   overflow: hidden;
   margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
 }
 
 .cardHeader {
@@ -304,5 +315,155 @@
 
   .cardIcon {
     background: #374151;
+  }
+}
+
+.scanInfo {
+  padding: 1.5rem 2rem;
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.scanInfo p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tableContainer {
+  padding: 1rem;
+  overflow: auto;
+  max-height: 400px;
+}
+
+.tableContainer :global(.ant-table-wrapper) {
+  overflow: auto;
+}
+
+.tableContainer :global(.ant-table) {
+  overflow: auto;
+}
+
+.tableContainer :global(.ant-table-container) {
+  overflow: auto;
+}
+
+.tableContainer :global(.ant-table-body) {
+  max-height: 400px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+.tableContainer :global(.ant-table-thead > tr > th) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: white;
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .tableContainer :global(.ant-table) {
+    background: transparent;
+    color: #f3f4f6;
+  }
+
+  .tableContainer :global(.ant-table-thead > tr > th) {
+    background: #374151;
+    color: #f3f4f6;
+  }
+
+  .tableContainer :global(.ant-table-tbody > tr > td) {
+    border-bottom: 1px solid #374151;
+  }
+
+  .tableContainer :global(.ant-table-tbody > tr:hover > td) {
+    background: #374151;
+  }
+
+  .tableContainer :global(.ant-pagination-item-active) {
+    background: #2563eb;
+    border-color: #2563eb;
+  }
+}
+
+/* Ajustes para responsividade */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .infoGrid {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+
+  .moduleGrid {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+
+  .header {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .headerContent {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .machineTitle {
+    font-size: 1.5rem;
+  }
+
+  .statusBadge {
+    margin-top: 1rem;
+  }
+
+  .tableContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tableContainer :global(.ant-table) {
+    font-size: 12px;
+  }
+
+  .tableContainer :global(.ant-table-thead > tr > th),
+  .tableContainer :global(.ant-table-tbody > tr > td) {
+    white-space: nowrap;
+    padding: 8px;
+  }
+}
+
+/* Ajustes para telas muito pequenas */
+@media (max-width: 480px) {
+  .container {
+    padding: 0.5rem;
+  }
+
+  .card {
+    margin-bottom: 1rem;
+  }
+
+  .cardHeader {
+    padding: 1rem;
+  }
+
+  .cardHeader h2 {
+    font-size: 1rem;
+  }
+
+  .infoItem,
+  .moduleItem {
+    padding: 1rem;
   }
 }

@@ -16,7 +16,6 @@ export default function Policies() {
       setPolicies(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching policies:', error);
-      message.error('Erro ao carregar políticas');
       setPolicies([]);
     } finally {
       setLoading(false);

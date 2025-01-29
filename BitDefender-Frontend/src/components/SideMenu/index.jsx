@@ -1,16 +1,20 @@
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   MdDashboard,
   MdPeople,
   MdVpnKey,
   MdComputer,
-  MdNotifications
+  MdNotifications,
+  MdExitToApp
 } from 'react-icons/md';
+import { message } from 'antd';
 import './styles.css';
 
 export default function SideMenu({ isMenuOpen, onToggleMenu }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useAuth();
 
   const menuItems = [
     {
@@ -44,6 +48,14 @@ export default function SideMenu({ isMenuOpen, onToggleMenu }) {
     onToggleMenu(); // Fecha o menu após navegar no mobile
   };
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+    }
+  };
+
   return (
     <nav className={`side-menu ${isMenuOpen ? 'open' : ''}`}>
       <ul>
@@ -58,6 +70,14 @@ export default function SideMenu({ isMenuOpen, onToggleMenu }) {
             </button>
           </li>
         ))}
+        <li className="logout-item">
+          <button className="menu-item logout" onClick={handleLogout}>
+            <span className="menu-icon">
+              <MdExitToApp size={24} />
+            </span>
+            <span className="menu-label">Sair</span>
+          </button>
+        </li>
       </ul>
     </nav>
   );

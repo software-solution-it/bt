@@ -16,7 +16,6 @@ export default function Networks() {
       setNetworks(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching networks:', error);
-      message.error('Erro ao carregar redes');
       setNetworks([]);
     } finally {
       setLoading(false);

@@ -22,10 +22,15 @@ class ApiKeysModel extends Model
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             api_key VARCHAR(255) NOT NULL,
-            is_active BOOLEAN DEFAULT TRUE,
+            is_active TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )";
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_api_key (api_key),
+            INDEX idx_name (name),
+            INDEX idx_is_active (is_active),
+            INDEX idx_created (created_at),
+            INDEX idx_updated (updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
         try {
             $this->db->exec($sql);

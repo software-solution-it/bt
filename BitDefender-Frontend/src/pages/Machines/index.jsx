@@ -15,7 +15,6 @@ export default function Machines() {
       setMachines(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching machines:', error);
-      message.error('Erro ao carregar máquinas');
       setMachines([]);
     } finally {
       setLoading(false);
@@ -34,11 +33,9 @@ export default function Machines() {
     try {
       setLoading(true);
       await syncService.syncAll();
-      message.success('Sincronização concluída com sucesso!');
       fetchMachines();
     } catch (error) {
       console.error('Error syncing data:', error);
-      message.error('Erro na sincronização');
     } finally {
       setLoading(false);
     }

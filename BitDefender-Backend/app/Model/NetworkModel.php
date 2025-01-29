@@ -109,6 +109,30 @@ class NetworkModel extends Model
                 FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
             )");
 
+            $sql = "CREATE TABLE IF NOT EXISTS networks (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                network_id VARCHAR(255) NOT NULL,
+                api_key_id INT NOT NULL,
+                name VARCHAR(255),
+                type VARCHAR(50),
+                status VARCHAR(50),
+                details JSON,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_network (network_id, api_key_id),
+                INDEX idx_api_key (api_key_id),
+                INDEX idx_network_id (network_id),
+                INDEX idx_name (name),
+                INDEX idx_type (type),
+                INDEX idx_status (status),
+                INDEX idx_created (created_at),
+                INDEX idx_updated (updated_at),
+                INDEX idx_composite_1 (api_key_id, status),
+                INDEX idx_composite_2 (network_id, type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+            $this->db->exec($sql);
+
         } catch (\PDOException $e) {
             Logger::error('Failed to create network tables', [
                 'error' => $e->getMessage()
@@ -925,75 +949,34 @@ class NetworkModel extends Model
             Logger::debug('NetworkModel::getInventory called', [
                 'page' => $page,
                 'perPage' => $perPage,
-                'filters' => print_r($filters, true)
+                'filters' => json_encode($filters)
             ]);
 
-            $offset = ($page - 1) * $perPage;
+            // Simplificando a query para usar apenas a tabela endpoints
+            $sql = "SELECT * FROM {$this->table}";
             $params = [];
-            
-            $query = "SELECT * FROM network_inventory WHERE 1=1";
-            
-            // Adiciona filtro de api_key_id se presente
-            if (isset($filters['api_key_id'])) {
-                $query .= " AND api_key_id = :api_key_id";
-                $params[':api_key_id'] = $filters['api_key_id'];
-            }
+            $whereConditions = [];
 
-            // Adiciona outros filtros se presentes
-            if (isset($filters['type'])) {
-                $query .= " AND type = :type";
-                $params[':type'] = $filters['type'];
-            }
-
-            if (isset($filters['status'])) {
-                $query .= " AND status = :status";
-                $params[':status'] = $filters['status'];
-            }
-
-            // Adiciona paginação
-            $query .= " LIMIT :offset, :limit";
-            $params[':offset'] = $offset;
-            $params[':limit'] = $perPage;
-
-            Logger::debug('Executing inventory query', [
-                'query' => $query,
-                'params' => print_r($params, true)
-            ]);
-
-            $stmt = $this->db->prepare($query);
-            
-            // Bind cada parâmetro individualmente
-            foreach ($params as $key => $value) {
-                if ($key === ':offset' || $key === ':limit') {
-                    $stmt->bindValue($key, $value, \PDO::PARAM_INT);
-                } else {
-                    $stmt->bindValue($key, $value);
+            if (!empty($filters)) {
+                if (isset($filters['api_key_id'])) {
+                    $whereConditions[] = "api_key_id = ?";
+                    $params[] = $filters['api_key_id'];
                 }
             }
 
-            $stmt->execute();
-            $items = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-
-            // Conta total de registros
-            $countQuery = "SELECT COUNT(*) as total FROM network_inventory WHERE 1=1";
-            if (isset($filters['api_key_id'])) {
-                $countQuery .= " AND api_key_id = :api_key_id";
+            if (!empty($whereConditions)) {
+                $sql .= " WHERE " . implode(' AND ', $whereConditions);
             }
+
+            // Adiciona paginação
+            $sql .= " LIMIT ? OFFSET ?";
+            $params[] = $perPage;
+            $params[] = ($page - 1) * $perPage;
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
             
-            $countStmt = $this->db->prepare($countQuery);
-            if (isset($filters['api_key_id'])) {
-                $countStmt->bindValue(':api_key_id', $filters['api_key_id']);
-            }
-            $countStmt->execute();
-            $totalCount = $countStmt->fetch(\PDO::FETCH_ASSOC)['total'];
-
-            return [
-                'items' => $items,
-                'total' => (int)$totalCount,
-                'page' => (int)$page,
-                'perPage' => (int)$perPage,
-                'pagesCount' => ceil($totalCount / $perPage)
-            ];
+            return $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
         } catch (\Exception $e) {
             Logger::error('Failed to get inventory', [

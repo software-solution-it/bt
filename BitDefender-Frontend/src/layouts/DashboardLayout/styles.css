@@ -1,31 +1,33 @@
 .dashboard-layout {
-  min-height: 100vh;
   display: flex;
+  min-height: 100vh;
   position: relative;
 }
 
 .sidebar {
-  position: fixed;
-  width: 250px;
+  width: 280px;
+  background: #001529;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
   height: 100vh;
-  left: 0;
+  position: fixed;
   top: 0;
-  bottom: 0;
-  overflow-y: auto;
-  background-color: #001529;
-  z-index: 100;
-  transition: transform 0.3s ease;
+  left: 0;
+  z-index: 1000;
 }
 
 .main-content {
-  margin-left: 250px; 
   flex: 1;
-  background-color: #f0f2f5;
-  min-height: 100vh;
+  margin-left: 280px;
+  transition: margin-left 0.3s ease;
+  width: calc(100% - 280px);
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .dashboard-content {
-  padding: 24px;
+  width: 100%;
+  min-height: 100%;
 }
 
 .logo-container {
@@ -34,7 +36,7 @@
   align-items: center;
   padding: 0 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  position: relative;
+  background: #001529;
 }
 
 .logo {
@@ -114,70 +116,62 @@
 
 /* Responsividade */
 @media (max-width: 768px) {
-  .menu-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .menu-toggle.floating {
-    display: flex;
-  }
-
   .sidebar {
     transform: translateX(-100%);
-    box-shadow: none;
-    transition: all 0.3s ease;
-    z-index: 1000;
-    visibility: visible;
-    display: block;
+    width: 240px;
   }
 
   .sidebar.open {
     transform: translateX(0);
-    box-shadow: 4px 0 10px rgba(0, 0, 0, 0.2);
-    visibility: visible;
-    display: block;
-  }
-
-  .sidebar.open .side-menu,
-  .sidebar.open .side-menu ul,
-  .sidebar.open .side-menu ul li {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
   }
 
   .main-content {
     margin-left: 0;
     width: 100%;
+    padding: 16px;
   }
 
   .mobile-overlay {
-    display: block;
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 90;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    display: none;
   }
 
   .mobile-overlay.visible {
-    opacity: 1;
+    display: block;
   }
 
-  /* Ajuste do logo no mobile */
-  .logo {
-    margin-top: 1rem;
-  }
-
-  .logo-container {
-    position: relative;
+  .menu-toggle {
+    display: block;
+    position: fixed;
+    top: 16px;
+    left: 16px;
     z-index: 1001;
+    background: #001529;
+    color: white;
+    border: none;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .menu-toggle.open {
+    left: 200px;
+  }
+}
+
+/* Ajustes para telas muito pequenas */
+@media (max-width: 480px) {
+  .sidebar {
+    width: 85%;
+  }
+
+  .menu-toggle.open {
+    left: calc(85% - 40px);
   }
 } 

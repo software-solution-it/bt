@@ -16,7 +16,6 @@ export default function Incidents() {
       setIncidents(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching incidents:', error);
-      message.error('Erro ao carregar incidentes');
       setIncidents([]);
     } finally {
       setLoading(false);

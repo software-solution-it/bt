@@ -100,6 +100,24 @@ export interface NetworkInventoryItem {
   is_deleted: number;
   created_at: string;
   updated_at: string;
+  webhook_events: WebhookEvent[];
+}
+
+export interface WebhookEvent {
+  id: number;
+  status: string;
+  severity: string;
+  created_at: string;
+  event_type: string;
+  computer_name: string;
+  computer_ip: string;
+  event_data: {
+    module: string;
+    malware_name?: string;
+    file_path?: string;
+    taskName?: string;
+    isSuccessful?: number;
+  };
 }
 
 export interface Machine {

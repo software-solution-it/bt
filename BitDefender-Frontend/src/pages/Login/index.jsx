@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { isValidEmail } from '../../utils/validators';
+import { message } from 'antd';
 import './styles.css';
 
 export default function Login() {
@@ -16,13 +17,32 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
     
+    // Validação básica
+    if (!formData.email || !formData.password) {
+      setErrors({ auth: 'Preencha todos os campos' });
+      setIsLoading(false);
+      return;
+    }
+
+    if (!isValidEmail(formData.email)) {
+      setErrors({ auth: 'Email inválido' });
+      setIsLoading(false);
+      return;
+    }
+    
     try {
       const result = await login(formData);
       if (!result.success) {
-        setErrors({ auth: 'Credenciais inválidas' });
+        const errorMessage = result.error || 'Usuário ou senha inválidos';
+        setErrors({ auth: errorMessage });
+      } else {
       }
     } catch (error) {
-      setErrors({ auth: error.message || 'Erro ao fazer login' });
+      const errorMessage = typeof error === 'string' ? error : 
+        error.response?.data?.result?.error || 
+        error.message || 
+        'Usuário ou senha inválidos';
+      setErrors({ auth: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -61,6 +81,7 @@ export default function Login() {
               onChange={handleChange}
               placeholder="Email"
               className={errors.email ? 'error' : ''}
+              autoComplete="email"
             />
           </div>
 
@@ -72,6 +93,7 @@ export default function Login() {
               onChange={handleChange}
               placeholder="Senha"
               className={errors.password ? 'error' : ''}
+              autoComplete="current-password"
             />
           </div>
 

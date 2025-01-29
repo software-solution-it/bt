@@ -482,4 +482,14 @@ class SyncController extends Controller
             ], 500);
         }
     }
+
+    public function events()
+    {
+        try {
+            $response = $this->syncService->getEvents();
+            return response()->json($response);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }

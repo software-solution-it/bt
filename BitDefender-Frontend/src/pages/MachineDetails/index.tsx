@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  LaptopOutlined, SafetyOutlined, ApiOutlined 
+  LaptopOutlined, SafetyOutlined, ApiOutlined
 } from '@ant-design/icons';
 import { motion } from 'framer-motion';
 import styles from './index.module.css';
+import { Table, Tag } from 'antd';
+import { WebhookEvent } from '../../services/sync.service';
 
 interface Machine {
   endpoint_id: string;
@@ -38,6 +40,7 @@ interface Machine {
   ssid: string | null;
   created_at: string;
   updated_at: string;
+  webhook_events?: WebhookEvent[];
 }
 
 const MachineDetails = () => {
@@ -48,6 +51,57 @@ const MachineDetails = () => {
   const parsedModules = machine?.modules ? JSON.parse(machine.modules) : {};
   const parsedMalwareStatus = machine?.malware_status ? JSON.parse(machine.malware_status) : {};
   const parsedAgentInfo = machine?.agent_info ? JSON.parse(machine.agent_info) : {};
+
+  const webhookColumns = [
+    {
+      title: 'Tipo de Evento',
+      dataIndex: 'event_type',
+      key: 'event_type',
+      render: (type: string) => {
+        const eventTypes: { [key: string]: string } = {
+          'av': 'Antivírus',
+          'task-status': 'Status de Tarefa',
+          'firewall': 'Firewall',
+          'device-control': 'Controle de Dispositivo'
+        };
+        return eventTypes[type] || type;
+      }
+    },
+    {
+      title: 'Severidade',
+      dataIndex: 'severity',
+      key: 'severity',
+      render: (severity: string) => (
+        <Tag color={
+          severity === 'high' ? 'red' : 
+          severity === 'medium' ? 'orange' : 
+          'green'
+        }>
+          {severity.toUpperCase()}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Detalhes',
+      dataIndex: 'event_data',
+      key: 'event_data',
+      render: (data: any, record: WebhookEvent) => {
+        if (record.event_type === 'av') {
+          return `${data.malware_name || ''} (${data.final_status || ''})`;
+        }
+        if (record.event_type === 'task-status') {
+          return `${data.taskName || ''} (${data.isSuccessful ? 'Sucesso' : 'Falha'})`;
+        }
+        return JSON.stringify(data);
+      }
+    },
+    {
+      title: 'Data',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => new Date(date).toLocaleString(),
+    },
+  ];
 
   return (
     <div className={styles.container}>
@@ -141,6 +195,24 @@ const MachineDetails = () => {
                     ))}
                   </div>
                 </div>
+
+                {/* Webhook Events */}
+                {machine?.webhook_events && machine.webhook_events.length > 0 && (
+                  <div className={styles.card}>
+                    <div className={styles.cardHeader}>
+                      <ApiOutlined className={styles.cardIcon} />
+                      <h2>Eventos Recentes</h2>
+                    </div>
+                    <div className={styles.tableContainer}>
+                      <Table 
+                        dataSource={machine.webhook_events}
+                        columns={webhookColumns}
+                        rowKey="id"
+                        pagination={{ pageSize: 5 }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className={styles.sidebar}>

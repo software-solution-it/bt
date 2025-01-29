@@ -1,44 +1,82 @@
-import { MOCK_USER } from '../config/mock';
+import api from './api';
+import { jwtDecode } from 'jwt-decode';
 
 export const authService = {
   async login(credentials) {
     try {
-      // Simulando um delay para parecer mais real
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      if (credentials.email === MOCK_USER.email && credentials.password === MOCK_USER.password) {
+      const response = await api.post('/auth/login', {
+        params: {
+          email: credentials.email,
+          password: credentials.password
+        }
+      });
+      const result = response.data.result;
+      if (result.success) {
+        // Armazena o token no localStorage
+        localStorage.setItem('auth_token', result.data.token);
         return {
           success: true,
-          token: 'mock-jwt-token',
-          user: {
-            id: MOCK_USER.id,
-            name: MOCK_USER.name,
-            email: MOCK_USER.email,
-            role: MOCK_USER.role
-          }
+          data: result.data
+        };
+      } else {
+        return {
+          success: false,
+          error: result.error || 'Erro ao fazer login'
         };
       }
-      
-      throw new Error('Credenciais inválidas');
     } catch (error) {
       console.error('Login error:', error);
-      throw error;
+      return {
+        success: false,
+        error: error.response?.data?.result?.error || 
+          error.message || 
+          'Erro de conexão com o servidor'
+      };
     }
   },
 
   async logout() {
-    return true;
+    try {
+      const response = await api.post('/auth/logout');
+      
+      // Remove o token do localStorage
+      localStorage.removeItem('auth_token');
+      
+      // Remove o token do header das requisições
+      delete api.defaults.headers.common['Authorization'];
+
+      if (response.data.result.success) {
+        return true;
+      } else {
+        throw new Error(response.data.result.error || 'Erro ao fazer logout');
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Mesmo com erro no backend, limpa os dados locais
+      localStorage.removeItem('auth_token');
+      delete api.defaults.headers.common['Authorization'];
+      
+      throw new Error(
+        error.response?.data?.result?.error || 
+        error.message || 
+        'Erro ao fazer logout'
+      );
+    }
   },
 
   async getProfile() {
-    return {
-      success: true,
-      user: {
-        id: MOCK_USER.id,
-        name: MOCK_USER.name,
-        email: MOCK_USER.email,
-        role: MOCK_USER.role
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        throw new Error('Não autenticado');
       }
-    };
+      return {
+        success: true,
+        user: jwtDecode(token).user
+      };
+    } catch (error) {
+      console.error('Get profile error:', error);
+      throw error;
+    }
   }
 }; 

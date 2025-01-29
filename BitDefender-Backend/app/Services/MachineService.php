@@ -7,11 +7,13 @@ use App\Model\NetworkModel;
 use App\Core\Logger;
 use App\Model\ApiKeysModel;
 use App\Model\MachineModel;
+use GuzzleHttp\Promise\Promise;
 
 class MachineService extends Service
 {
     private $networkModel;
     private $machineModel;
+    private $memoryCache = [];
 
     public function __construct()
     {
@@ -285,6 +287,74 @@ class MachineService extends Service
                 'error' => $e->getMessage()
             ]);
             throw $e;
+        }
+    }
+
+    public function getInventory($apiKey, $type = 'endpoints')
+    {
+        $cacheKey = "service_inventory_{$apiKey}_{$type}";
+
+        // Verifica cache em memória
+        if (isset($this->memoryCache[$cacheKey])) {
+            $cached = $this->memoryCache[$cacheKey];
+            if (time() - $cached['time'] < 300) { // 5 minutos
+                return $cached['data'];
+            }
+        }
+
+        try {
+            // Executa em paralelo se houver múltiplas requisições
+            $promise = new Promise(function() use ($apiKey, $type, $cacheKey) {
+                $result = $this->machineModel->getInventory($apiKey, $type);
+
+                // Processa e filtra os dados antes de retornar
+                $processedResult = $this->processInventoryData($result, $type);
+
+                // Armazena no cache
+                $this->memoryCache[$cacheKey] = [
+                    'time' => time(),
+                    'data' => $processedResult
+                ];
+
+                return $processedResult;
+            });
+
+            return $promise->wait();
+        } catch (Exception $e) {
+            Logger::error('Error in service layer', [
+                'error' => $e->getMessage(),
+                'apiKey' => substr($apiKey, 0, 10) . '...'
+            ]); 
+            throw $e;
+        }
+    }
+
+    private function processInventoryData($result, $type)
+    {
+        if (!isset($result['result']['items'])) {
+            return $result;
+        }
+
+        // Filtra e processa apenas os dados necessários
+        $items = array_map(function($item) use ($type) {
+            return $this->filterItemFields($item, $type);
+        }, $result['result']['items']);
+
+        $result['result']['items'] = $items;
+        return $result;
+    }
+
+    private function filterItemFields($item, $type)
+    {
+        // Remove campos desnecessários baseado no tipo
+        switch ($type) {
+            case 'endpoints':
+                return array_intersect_key($item, array_flip([
+                    'id', 'name', 'label', 'ip', 'os', 'webhook_events'
+                ]));
+            // Adicione outros casos conforme necessário
+            default:
+                return $item;
         }
     }
 }

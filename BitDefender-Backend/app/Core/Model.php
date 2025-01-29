@@ -2,10 +2,11 @@
 
 namespace App\Core;
 
-use App\Config\Database;
 use PDO;
+use App\Core\Database;
+use App\Core\Logger;
 
-abstract class Model
+class Model
 {
     protected $db;
     protected $table;
@@ -13,14 +14,38 @@ abstract class Model
 
     public function __construct()
     {
-        $this->db = Database::getInstance()->getConnection();
+        try {
+            $this->db = new PDO(
+                "mysql:host=" . getenv('DB_HOST') . 
+                ";dbname=" . getenv('DB_DATABASE') . 
+                ";port=" . getenv('DB_PORT'),
+                getenv('DB_USERNAME'),
+                getenv('DB_PASSWORD'),
+                [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+                ]
+            );
+        } catch (\PDOException $e) {
+            Logger::error('Database connection failed', [
+                'error' => $e->getMessage()
+            ]);
+            throw new \Exception('Database connection failed', 500);
+        }
     }
 
     public function find($id)
     {
-        $stmt = $this->db->prepare("SELECT * FROM {$this->table} WHERE {$this->primaryKey} = ?");
-        $stmt->execute([$id]);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM {$this->table} WHERE {$this->primaryKey} = :id");
+            $stmt->execute(['id' => $id]);
+            return $stmt->fetch();
+        } catch (\PDOException $e) {
+            Logger::error("Error finding record in {$this->table}", [
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
     }
 
     public function findBy(array $criteria)

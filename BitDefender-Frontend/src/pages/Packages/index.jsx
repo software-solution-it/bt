@@ -16,7 +16,6 @@ export default function Packages() {
       setPackages(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching packages:', error);
-      message.error('Erro ao carregar pacotes');
       setPackages([]);
     } finally {
       setLoading(false);

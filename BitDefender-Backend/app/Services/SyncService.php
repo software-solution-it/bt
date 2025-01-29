@@ -565,4 +565,10 @@ class SyncService extends Service
     {
         return $machine['details']['isManaged'] ? 'active' : 'inactive';
     }
+
+    public function getEvents()
+    {
+        // Implementar lógica para buscar eventos
+        return $this->makeRequest('GET', '/network_inventory');
+    }
 }

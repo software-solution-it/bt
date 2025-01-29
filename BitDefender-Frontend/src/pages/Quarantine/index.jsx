@@ -17,7 +17,6 @@ export default function Quarantine() {
       setQuarantineItems(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching quarantine items:', error);
-      message.error('Erro ao carregar itens em quarentena');
       setQuarantineItems([]);
     } finally {
       setLoading(false);
@@ -41,11 +40,9 @@ export default function Quarantine() {
     try {
       setLoading(true);
       // Implementar lógica de restauração
-      message.success('Itens restaurados com sucesso');
       fetchQuarantineItems();
     } catch (error) {
       console.error('Error restoring items:', error);
-      message.error('Erro ao restaurar itens');
     } finally {
       setLoading(false);
       setSelectedItems([]);
@@ -61,11 +58,9 @@ export default function Quarantine() {
     try {
       setLoading(true);
       // Implementar lógica de remoção
-      message.success('Itens removidos com sucesso');
       fetchQuarantineItems();
     } catch (error) {
       console.error('Error deleting items:', error);
-      message.error('Erro ao remover itens');
     } finally {
       setLoading(false);
       setSelectedItems([]);
