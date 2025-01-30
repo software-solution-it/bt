@@ -1,0 +1,1 @@
+$router->get('/apikeys/list', 'ApiKeysController@listKeys'); 

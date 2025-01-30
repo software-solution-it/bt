@@ -15,20 +15,35 @@ class ApiKeysController extends Controller
         $this->apiKeysService = new ApiKeysService();
     }
 
-    public function listKeys($params)
+    public function listKeys()
     {
         try {
-            Logger::debug('ApiKeysController::listKeys called');
-            $result = $this->apiKeysService->getAllKeys();
+            Logger::debug('ApiKeysController::listKeys called', [
+                'query_params' => $_GET
+            ]);
+            
+            // Extrai o tipo dos parâmetros da query string
+            $type = $_GET['type'] ?? 'all';
+            
+            Logger::debug('Extracted type', ['type' => $type]); // Debug
+            
+            // Valida o tipo
+            $validTypes = ['all', 'Produtos', 'Serviços'];
+            if (!in_array($type, $validTypes)) {
+                throw new \InvalidArgumentException('Tipo inválido: ' . $type);
+            }
+            
+            $result = $this->apiKeysService->getAllKeys($type);
 
             return $this->jsonResponse([
                 'jsonrpc' => '2.0',
                 'result' => $result,
-                'id' => $params['id'] ?? null
+                'id' => null
             ]);
         } catch (\Exception $e) {
             Logger::error('Error in listKeys', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'query_params' => $_GET
             ]);
             return $this->jsonResponse([
                 'jsonrpc' => '2.0',
@@ -37,7 +52,7 @@ class ApiKeysController extends Controller
                     'message' => 'Internal error',
                     'data' => ['details' => $e->getMessage()]
                 ],
-                'id' => $params['id'] ?? null
+                'id' => null
             ], 500);
         }
     }

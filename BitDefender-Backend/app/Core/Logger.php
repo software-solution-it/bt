@@ -2,21 +2,37 @@
 
 namespace App\Core;
 
-use App\Config\Environment;
-
 class Logger
 {
     private static $logFile;
+    private static $initialized = false;
 
-    public static function init()
+    private static function initialize()
     {
-        self::$logFile = Environment::get('LOG_FILE', __DIR__ . '/../../logs/app.log');
-        
-        // Cria o diretório de logs se não existir
-        $logDir = dirname(self::$logFile);
+        if (self::$initialized) return;
+
+        // Usar caminho absoluto para o diretório de logs
+        $logDir = dirname(dirname(__DIR__)) . '/logs';
+        self::$logFile = $logDir . '/app.log';
+
+        // Criar diretório se não existir
         if (!is_dir($logDir)) {
-            mkdir($logDir, 0777, true);
+            $oldmask = umask(0);
+            mkdir($logDir, 0755, true);
+            umask($oldmask);
         }
+
+        // Verificar permissões
+        if (!is_writable($logDir)) {
+            error_log("Log directory is not writable: " . $logDir);
+        }
+
+        self::$initialized = true;
+    }
+
+    public static function debug($message, array $context = [])
+    {
+        self::log('DEBUG', $message, $context);
     }
 
     public static function info($message, array $context = [])
@@ -29,23 +45,17 @@ class Logger
         self::log('ERROR', $message, $context);
     }
 
-    public static function debug($message, array $context = [])
-    {
-        if (Environment::get('APP_DEBUG', false)) {
-            self::log('DEBUG', $message, $context);
-        }
-    }
-
     private static function log($level, $message, array $context = [])
     {
-        if (!self::$logFile) {
-            self::init();
+        self::initialize();
+
+        $timestamp = date('Y-m-d H:i:s');
+        $contextString = !empty($context) ? json_encode($context) : '';
+        $logMessage = "[$timestamp] [$level] $message $contextString\n";
+
+        if (!@file_put_contents(self::$logFile, $logMessage, FILE_APPEND)) {
+            error_log("Failed to write to log file: " . self::$logFile);
+            error_log($logMessage); // Fallback para error_log do PHP
         }
-
-        $date = date('Y-m-d H:i:s');
-        $contextStr = !empty($context) ? ' ' . json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : '';
-        $logMessage = "[$date] [$level] $message$contextStr" . PHP_EOL;
-
-        file_put_contents(self::$logFile, $logMessage, FILE_APPEND);
     }
 }

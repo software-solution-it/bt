@@ -5,14 +5,14 @@ import path from 'path'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  base: './',
   publicDir: 'public',
   server: {
     port: 3000,
     host: true,
     proxy: {
       '^/auth/|^/api/': {  // Apenas rotas que começam com /auth ou /api
-        target: 'https://api-sd.m3solutions.net.br',
+        target: 'http://https://api-sd.m3solutions.net.br',
         changeOrigin: true,
         secure: false,
         configure: (proxy, options) => {

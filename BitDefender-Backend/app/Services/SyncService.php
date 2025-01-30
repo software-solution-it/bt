@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Core\Service;
 use App\Core\Logger;
 use App\Model\PoliciesModel;
+use App\Model\SyncModel;
 
 class SyncService extends Service
 {
@@ -21,6 +22,7 @@ class SyncService extends Service
     private $reportsService;
     private $machineService; 
     private $policiesModel;
+    private $syncModel;
 
     public function __construct()
     {
@@ -37,6 +39,7 @@ class SyncService extends Service
         $this->reportsService = new ReportsService();
         $this->machineService = new MachineService();
         $this->policiesModel = new PoliciesModel();
+        $this->syncModel = new SyncModel();
     }
 
     private function formatQuarantineData($rawData)
@@ -62,178 +65,165 @@ class SyncService extends Service
     public function syncAll($params)
     {
         try {
-            Logger::info('Starting full sync process', [
-                'params' => $params
-            ]);
-            
-            $results = [];
-
-            if (!isset($params['api_key_id'])) {
-                throw new \Exception('API Key ID is required');
+            $apiKey = $this->syncModel->getApiKeyWithService($params['api_key_id']);
+            if (!$apiKey) {
+                throw new \Exception('API Key not found');
             }
 
-            // Sync endpoints
-            Logger::info('Starting endpoints sync');
-            $endpoints = $this->networkService->getEndpointsList([
-                'api_key_id' => $params['api_key_id'],
-                'page' => 1,
-                'perPage' => 10000
-            ]);
-            Logger::info('Endpoints data received', [
-                'data_type' => gettype($endpoints),
-                'has_items' => isset($endpoints['items'])
-            ]);
-            $results['endpoints'] = $endpoints;
+            $lastSync = $this->syncModel->getLastSyncTime($params['api_key_id']);
+            $currentTime = time();
 
-            // Sync accounts
-            Logger::info('Starting accounts sync');
-            $results['accounts'] = $this->accountService->getAccounts([
+            Logger::info('Starting sync process', [
+                'last_sync' => $lastSync ? date('Y-m-d H:i:s', $lastSync) : 'never',
+                'api_key_id' => $params['api_key_id'],
+                'service_type' => $apiKey['service_type']
+            ]);
+
+            // Sincroniza políticas primeiro
+            $policiesService = new PoliciesService();
+            $policies = $policiesService->getPoliciesList([
                 'api_key_id' => $params['api_key_id'],
                 'page' => 1,
                 'perPage' => 100
             ]);
-            Logger::info('Accounts sync completed', [
-                'data_type' => gettype($results['accounts'])
+
+            Logger::info('Policies synced', [
+                'total_policies' => count($policies['items'] ?? [])
             ]);
 
-            // Sync blocklist
-            Logger::info('Starting blocklist sync');
-            $results['blocklist'] = $this->incidentsService->getBlocklistItems([
+            // Depois sincroniza máquinas com as políticas atualizadas
+            $machineService = new MachineService();
+            $machines = $machineService->getMachineInventory([
                 'api_key_id' => $params['api_key_id'],
                 'page' => 1,
                 'perPage' => 100
             ]);
-            Logger::info('Blocklist sync completed', [
-                'data_type' => gettype($results['blocklist'])
-            ]);
 
-            // Sync license
-            Logger::info('Starting license sync');
-            $results['license'] = $this->licensingService->getLicenseInfo([
-                'api_key_id' => $params['api_key_id']
-            ]);
-            Logger::info('License sync completed', [
-                'data_type' => gettype($results['license'])
-            ]);
+            $syncOperations = [];
+            
+            if ($apiKey['service_type'] === 'Produtos') {
+                // Para Produtos, apenas licenças com informações básicas
+                $syncOperations['licenses'] = [
+                    'function' => function() use ($params, $lastSync, $apiKey) {
+                        $licenseInfo = $this->licensingService->getLicenseInfo([
+                            'api_key_id' => $params['api_key_id']
+                        ]);
 
-            // Sync scan tasks
-            Logger::info('Starting scan tasks sync');
-            $results['scanTasks'] = $this->networkService->getScanTasksList([
-                'api_key_id' => $params['api_key_id'],
-                'page' => 1,
-                'perPage' => 100
-            ]);
-            Logger::info('Scan tasks sync completed', [
-                'data_type' => gettype($results['scanTasks'])
-            ]);
+                        // Atualiza o nome da licença para o nome da empresa
+                        if (isset($licenseInfo['items'])) {
+                            foreach ($licenseInfo['items'] as &$license) {
+                                $license['name'] = $apiKey['name']; // Nome da empresa/chave
+                                // Mantém apenas informações relevantes
+                                $license = [
+                                    'name' => $license['name'],
+                                    'expiry_date' => $license['expiryDate'] ?? null,
+                                    'total_slots' => $license['totalSlots'] ?? 0,
+                                    'used_slots' => $license['usedSlots'] ?? 0
+                                ];
+                            }
+                        }
 
-            // Sync custom groups
-            Logger::info('Starting custom groups sync');
-            $customGroups = $this->networkService->getCustomGroupsList([
-                'api_key_id' => $params['api_key_id']
-            ]) ?? [];
-            $results['customGroups'] = $customGroups;
-            Logger::info('Custom groups sync completed', [
-                'data_type' => gettype($results['customGroups'])
-            ]);
+                        return $licenseInfo;
+                    },
+                    'interval' => 3600 // 1 hora
+                ];
+            } else {
+                // Para Serviços, mantém todas as operações
+                $syncOperations = [
+                    'endpoints' => [
+                        'function' => function() use ($params, $lastSync) {
+                            return $this->networkService->getEndpointsList([
+                                'api_key_id' => $params['api_key_id'],
+                                'page' => 1,
+                                'perPage' => 100,
+                                'filters' => [
+                                    'updatedAfter' => $lastSync ? date('Y-m-d\TH:i:s\Z', $lastSync) : null
+                                ]
+                            ]);
+                        },
+                        'interval' => 300
+                    ],
+                    'accounts' => [
+                        'function' => function() use ($params, $lastSync) {
+                            return $this->accountService->getAccounts([
+                                'api_key_id' => $params['api_key_id'],
+                                'filters' => ['updatedAfter' => $lastSync ? date('Y-m-d\TH:i:s\Z', $lastSync) : null]
+                            ]);
+                        },
+                        'interval' => 3600
+                    ],
+                    'policies' => [
+                        'function' => function() use ($params, $lastSync) {
+                            return $this->policiesService->getPoliciesList([
+                                'api_key_id' => $params['api_key_id'],
+                                'filters' => ['updatedAfter' => $lastSync ? date('Y-m-d\TH:i:s\Z', $lastSync) : null]
+                            ]);
+                        },
+                        'interval' => 7200
+                    ]
+                ];
+            }
 
-            // Sync network inventory
-            Logger::info('Starting network inventory sync');
-            $networkInventory = $this->networkService->getNetworkInventoryItems([
-                'api_key_id' => $params['api_key_id'],
-                'page' => 1,
-                'perPage' => 100,
-                'filters' => [
-                    'api_key_id' => $params['api_key_id']
-                ]
-            ]);
-            Logger::info('Network inventory initial data received', [
-                'data_type' => gettype($networkInventory),
-                'total_items' => $networkInventory['total'] ?? 0
-            ]);
-            $results['networkInventory'] = $networkInventory;
+            foreach ($syncOperations as $key => $operation) {
+                try {
+                    $lastOperationSync = $this->syncModel->getLastOperationSync($params['api_key_id'], $key);
+                    $shouldSync = !$lastOperationSync || (time() - $lastOperationSync) > $operation['interval'];
 
-            // Sync installation links
-            Logger::info('Starting installation links sync');
-            $results['installationLinks'] = $this->packagesService->getInstallationLinks([
-                'api_key_id' => $params['api_key_id']
-            ]);
-            Logger::info('Installation links sync completed', [
-                'data_type' => gettype($results['installationLinks'])
-            ]);
+                    if (!$shouldSync) {
+                        continue;
+                    }
 
-            // Sync packages
-            Logger::info('Starting packages sync');
-            $results['packages'] = $this->packagesService->getPackagesList([
-                'api_key_id' => $params['api_key_id'],
-                'page' => 1,
-                'perPage' => 100
-            ]);
-            Logger::info('Packages sync completed', [
-                'data_type' => gettype($results['packages']),
-                'packages_data' => $results['packages']
-            ]);
-
-            // Sync policies
-            Logger::info('Starting policies sync');
-            $policiesResult = $this->policiesService->getPoliciesList([
-                'api_key_id' => $params['api_key_id'],
-                'page' => 1,
-                'perPage' => 100
-            ]);
-            Logger::info('Policies data received', [
-                'data_type' => gettype($policiesResult),
-                'data' => $policiesResult
-            ]);
-
-            if (is_array($policiesResult)) {
-                $results['policies'] = $policiesResult;
-                if (isset($policiesResult['items'])) {
-                    Logger::info('Starting policies details sync');
-                    $this->syncPolicies($policiesResult['items'], $params['api_key_id']);
-                    Logger::info('Policies details sync completed');
+                    Logger::info("Starting {$key} sync");
+                    $operation['function']();
+                    $this->syncModel->updateLastOperationSync($params['api_key_id'], $key);
+                    Logger::info("{$key} sync completed");
+                    
+                } catch (\Exception $e) {
+                    Logger::error("Error syncing {$key}", ['error' => $e->getMessage()]);
+                    return ['success' => false, 'message' => "Failed to sync {$key}"];
                 }
             }
 
-            // Sync quarantine
-            Logger::info('Starting quarantine sync');
-            $quarantineResult = $this->quarantineService->getQuarantineItemsList('computers', [
-                'api_key_id' => $params['api_key_id'],
-                'page' => 1,
-                'perPage' => 100
-            ]);
-            Logger::info('Quarantine data received', [
-                'data_type' => gettype($quarantineResult),
-                'data' => $quarantineResult
-            ]);
-
-            if ($quarantineResult) {
-                $results['quarantine'] = $this->formatQuarantineData($quarantineResult);
-            }
-
-            // Sync reports
-            Logger::info('Starting reports sync');
-            $results['reports'] = $this->reportsService->getReportsList([
-                'api_key_id' => $params['api_key_id'],
-                'page' => 1,
-                'perPage' => 100
-            ]);
-            Logger::info('Reports sync completed', [
-                'data_type' => gettype($results['reports'])
-            ]);
-
-            Logger::info('Full sync process completed successfully', [
-                'total_results' => count($results)
-            ]);
-            return $results;
+            $this->syncModel->updateLastSyncTime($params['api_key_id'], $currentTime);
+            return [
+                'success' => true,
+                'message' => 'Sync completed successfully',
+                'data' => [
+                    'policies_synced' => count($policies['items'] ?? []),
+                    'machines_synced' => count($machines['items'] ?? [])
+                ]
+            ];
 
         } catch (\Exception $e) {
-            Logger::error('Full sync process failed', [
+            Logger::error('Sync failed', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
             throw $e;
         }
+    }
+
+    private function getErrorCode(\Exception $e) {
+        // Verifica o código da exceção
+        $code = $e->getCode();
+        if ($code) return $code;
+        
+        // Verifica se é uma exceção HTTP
+        if ($e instanceof \GuzzleHttp\Exception\ClientException) {
+            return $e->getResponse()->getStatusCode();
+        }
+        
+        // Procura por códigos HTTP na mensagem de erro
+        $message = $e->getMessage();
+        if (preg_match('/HTTP Error: (\d{3})/', $message, $matches)) {
+            return (int)$matches[1];
+        }
+        
+        return 500; // Fallback para erro genérico
+    }
+
+    private function isPermissionError($errorCode) {
+        return in_array($errorCode, [401, 403]);
     }
 
     private function syncPolicies($policies, $apiKeyId)
@@ -568,7 +558,16 @@ class SyncService extends Service
 
     public function getEvents()
     {
-        // Implementar lógica para buscar eventos
-        return $this->makeRequest('GET', '/network_inventory');
+        try {
+            return $this->networkService->getNetworkInventoryItems([
+                'page' => 1,
+                'perPage' => 100
+            ]);
+        } catch (\Exception $e) {
+            Logger::error('Failed to get events', [
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
     }
 }

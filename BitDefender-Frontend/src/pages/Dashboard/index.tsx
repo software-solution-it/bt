@@ -12,7 +12,7 @@ import {
   LoadingOutlined,
   ArrowUpOutlined
 } from '@ant-design/icons';
-import { Select, Spin } from 'antd';
+import { Select, Spin, message, Progress, Modal, Input, Form } from 'antd';
 import { syncService } from '../../services/sync.service';
 import { MachineListResponse, NetworkInventoryItem, License, Machine } from '../../interfaces/MachineList';
 import './styles.css';
@@ -30,6 +30,7 @@ import {
 } from 'chart.js';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { networkService } from '../../services/network.service';
 
 ChartJS.register(
   CategoryScale,
@@ -98,18 +99,34 @@ interface DashboardData {
     computer_name?: string;
     computer_ip?: string;
   }>;
+  expiryDate?: string;
 }
+
+interface ApiKey {
+  id: number;
+  name: string;
+  company_name?: string; // Nome da empresa associada à chave
+  service_type?: string;
+}
+
+const SERVICE_TYPES = [
+  { value: 'all', label: 'Todos os tipos' },
+  { value: 'Produtos', label: 'Produtos' },
+  { value: 'Serviços', label: 'Serviços' }
+];
 
 export default function Dashboard() {
   const [isDataLoading, setIsDataLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [apiKeys, setApiKeys] = useState<Array<{ id: number; name: string }>>([]);
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [selectedApiKey, setSelectedApiKey] = useState<number | undefined>(() => {
     const savedKey = sessionStorage.getItem('selectedApiKey');
     return savedKey ? Number(savedKey) : undefined;
   });
   const [selectedKeyName, setSelectedKeyName] = useState<string>('');
+  const [serviceType, setServiceType] = useState<string>('');
+  const [selectedServiceType, setSelectedServiceType] = useState<string>('all');
   const initialDashboardData = {
     totalEndpoints: 0,
     totalLicenses: 0,
@@ -130,27 +147,23 @@ export default function Dashboard() {
   });
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<any>(null);
+  const [isScanModalVisible, setIsScanModalVisible] = useState(false);
+  const [selectedEndpoint, setSelectedEndpoint] = useState<any>(null);
+  const [form] = Form.useForm();
   const navigate = useNavigate();
+
+  const SCAN_TYPES = [
+    { value: 1, label: 'Quick Scan' },
+    { value: 2, label: 'Full Scan' },
+    { value: 3, label: 'Memory Scan' }
+  ];
 
   useEffect(() => {
     const initializeDashboard = async () => {
       try {
         setLoading(true);
         // Busca as chaves API
-        const keys = await syncService.getApiKeys();
-        setApiKeys(keys);
-
-        // Verifica se existe uma chave salva
-        const savedKey = sessionStorage.getItem('selectedApiKey');
-        if (savedKey) {
-          const selectedKey = keys.find(key => key.id === Number(savedKey));
-          if (selectedKey) {
-            setSelectedKeyName(selectedKey.name);
-            setSelectedApiKey(selectedKey.id);
-            // Busca os dados apenas se houver uma chave selecionada
-            await fetchDashboardData(selectedKey.id);
-          }
-        }
+        await fetchApiKeys();
       } catch (error) {
         console.error('Erro ao inicializar dashboard', error);
       } finally {
@@ -161,62 +174,91 @@ export default function Dashboard() {
     initializeDashboard();
   }, []);
 
+  useEffect(() => {
+    if (!loading) { 
+      fetchApiKeys();
+    }
+  }, [selectedServiceType]);
+
+  const fetchApiKeys = async () => {
+    try {
+      const response = await syncService.getApiKeys(selectedServiceType);
+      const formattedKeys = response.map((key: ApiKey) => ({
+        value: key.id,
+        label: key.company_name || key.name,
+        service_type: key.service_type
+      }));
+      
+      setApiKeys(formattedKeys);
+      
+      const savedKeyId = sessionStorage.getItem('selectedApiKey');
+      if (savedKeyId) {
+        const savedKey = formattedKeys.find(key => key.value === Number(savedKeyId));
+        if (savedKey) {
+          setSelectedApiKey(savedKey.value);
+          setSelectedKeyName(savedKey.label);
+          setServiceType(savedKey.service_type);
+          fetchDashboardData(savedKey.value);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar chaves API:', error);
+      message.error('Erro ao carregar as chaves API');
+    }
+  };
+
   const fetchDashboardData = async (apiKeyId: number) => {
-    if (!selectedApiKey) return;
+    if (!apiKeyId) return;
 
     try {
       setIsDataLoading(true);
       
-      // Busca endpoints
-      const endpointsResponse = await syncService.getMachineInventory(apiKeyId, 'endpoints');
-      const endpoints = endpointsResponse.result.items || [];
-      
-      // Busca licenças
+      // Busca licenças em todos os casos
       const licensesResponse = await syncService.getMachineInventory(apiKeyId, 'licenses');
       const licenses = licensesResponse.result.items || [];
-      const license = licenses[0] || { total_slots: 0, used_slots: 0 };
+      const license = licenses[0] || { total_slots: 0, used_slots: 0, expiry_date: null };
 
-      // Busca eventos
+      // Encontra a chave selecionada para verificar o tipo
+      const selectedKey = apiKeys.find(key => key.value === apiKeyId);
+      const keyType = selectedKey?.service_type;
+
+      // Se for tipo Produtos, só precisamos das informações da licença
+      if (keyType === 'Produtos') {
+        setDashboardData({
+          ...initialDashboardData,
+          totalLicenses: license.total_slots,
+          usedLicenses: license.used_slots,
+          availableLicenses: license.total_slots - license.used_slots,
+          expiryDate: license.expiry_date
+        });
+        return;
+      }
+
+      // Se for Serviços, busca o resto das informações
+      const endpointsResponse = await syncService.getMachineInventory(apiKeyId, 'endpoints');
+      const endpoints = endpointsResponse.result.items || [];
       const allEvents = endpoints.flatMap(endpoint => endpoint.webhook_events || []);
-      console.log('Todos os eventos:', allEvents);
       
       const securityEvents = allEvents.filter(event => 
         event.event_type === 'av' || 
         event.severity.toLowerCase() === 'high' || 
         event.severity.toLowerCase() === 'medium'
       );
-      console.log('Eventos de segurança:', securityEvents);
 
       setDashboardData({
         totalEndpoints: endpoints.length,
         totalLicenses: license.total_slots,
         usedLicenses: license.used_slots,
         availableLicenses: license.total_slots - license.used_slots,
+        expiryDate: license.expiry_date,
         endpoints: endpoints,
         events: allEvents,
         securityEvents: securityEvents
       });
 
-      // Logs para debug dos dados dos gráficos
-      console.log('Eventos por tipo:', {
-        antimalware: allEvents.filter(e => e.event_data.module === 'av').length,
-        firewall: allEvents.filter(e => e.event_data.module === 'fw').length,
-        controleAcesso: allEvents.filter(e => e.event_data.module === 'uc').length,
-        protecaoDados: allEvents.filter(e => e.event_data.module === 'dp').length,
-        hyperDetect: allEvents.filter(e => e.event_data.module === 'hd').length,
-        sandbox: allEvents.filter(e => e.event_data.module === 'network-sandboxing').length,
-        outros: allEvents.filter(e => !['av', 'fw', 'uc', 'dp', 'hd', 'network-sandboxing'].includes(e.event_data.module)).length
-      });
-
-      console.log('Eventos de segurança por severidade:', {
-        alta: securityEvents.filter(e => e.severity?.toLowerCase() === 'high').length,
-        media: securityEvents.filter(e => e.severity?.toLowerCase() === 'medium').length,
-        baixa: securityEvents.filter(e => e.severity?.toLowerCase() === 'low').length
-      });
-
     } catch (error: any) {
-      setError(error.message);
-      console.error('Erro ao carregar dados do dashboard', error);
+      console.error('Erro ao buscar dados do dashboard:', error);
+      message.error('Erro ao carregar dados do dashboard');
     } finally {
       setIsDataLoading(false);
     }
@@ -280,6 +322,97 @@ export default function Dashboard() {
       state: { machineData: endpoint }
     });
   };
+
+  const handleScanClick = (endpoint: any) => {
+    setSelectedEndpoint(endpoint);
+    setIsScanModalVisible(true);
+    form.setFieldsValue({
+      type: 1,
+      name: `Scan - ${endpoint.name}`
+    });
+  };
+
+  const handleScanSubmit = async (values: any) => {
+    try {
+      if (!selectedApiKey || !selectedEndpoint) return;
+      
+      setIsDataLoading(true);
+      await networkService.createScanTask(
+        selectedApiKey,
+        [selectedEndpoint.endpoint_id],
+        values.name,
+        values.type
+      );
+      
+      message.success('Scan iniciado com sucesso!');
+      setIsScanModalVisible(false);
+      form.resetFields();
+    } catch (error) {
+      console.error('Erro ao iniciar scan:', error);
+      message.error('Erro ao iniciar scan');
+    } finally {
+      setIsDataLoading(false);
+    }
+  };
+
+  const renderScanModal = () => (
+    <Modal
+      title="Iniciar Scan"
+      open={isScanModalVisible}
+      onCancel={() => {
+        setIsScanModalVisible(false);
+        form.resetFields();
+      }}
+      onOk={() => form.submit()}
+      okText="Iniciar"
+      cancelText="Cancelar"
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={handleScanSubmit}
+        initialValues={{
+          type: 1,
+          name: selectedEndpoint ? `Scan - ${selectedEndpoint.name}` : ''
+        }}
+      >
+        <Form.Item
+          name="type"
+          label="Tipo de Scan"
+          rules={[{ required: true, message: 'Selecione o tipo de scan' }]}
+        >
+          <Select options={SCAN_TYPES} />
+        </Form.Item>
+
+        <Form.Item
+          name="name"
+          label="Nome do Scan"
+          rules={[{ required: true, message: 'Digite um nome para o scan' }]}
+        >
+          <Input placeholder="Digite um nome para o scan" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+
+  const renderActionButtons = (endpoint: any) => (
+    <div className="action-buttons">
+      <button 
+        className="action-button"
+        onClick={() => handleViewDetails(endpoint)}
+      >
+        Detalhes
+      </button>
+      {serviceType !== 'Produtos' && (
+        <button 
+          className="action-button scan-button"
+          onClick={() => handleScanClick(endpoint)}
+        >
+          Scan
+        </button>
+      )}
+    </div>
+  );
 
   const styles = {
     dashboardContainer: {
@@ -546,26 +679,24 @@ export default function Dashboard() {
   };
 
   const pieChartData = {
-    labels: ['Alta', 'Média', 'Baixa'],
+    labels: dashboardData.securityEvents.length > 0 
+      ? ['Alta', 'Média', 'Baixa']
+      : ['Sem eventos'],
     datasets: [{
-      data: [
-        dashboardData.events?.filter(e => 
-          ['av', 'hd', 'network-sandboxing'].includes(e.event_data.module) && 
-          e.severity?.toLowerCase() === 'high'
-        ).length || 0,
-        dashboardData.events?.filter(e => 
-          ['av', 'hd', 'network-sandboxing'].includes(e.event_data.module) && 
-          e.severity?.toLowerCase() === 'medium'
-        ).length || 0,
-        dashboardData.events?.filter(e => 
-          ['av', 'hd', 'network-sandboxing'].includes(e.event_data.module) && 
-          e.severity?.toLowerCase() === 'low'
-        ).length || 0,
-      ],
-      backgroundColor: ['#ff4d4f', '#faad14', '#52c41a'],
-      hoverBackgroundColor: ['#ff7875', '#ffc53d', '#73d13d'],
-      borderWidth: 1,
-      borderColor: '#fff'
+      data: dashboardData.securityEvents.length > 0 
+        ? [
+            dashboardData.securityEvents.filter(e => e.severity?.toLowerCase() === 'high').length,
+            dashboardData.securityEvents.filter(e => e.severity?.toLowerCase() === 'medium').length,
+            dashboardData.securityEvents.filter(e => e.severity?.toLowerCase() === 'low').length
+          ]
+        : [1], // Um único valor para mostrar o gráfico vazio
+      backgroundColor: dashboardData.securityEvents.length > 0 
+        ? ['#ff4d4f', '#faad14', '#52c41a']
+        : ['#f0f0f0'], // Cinza claro para estado vazio
+      borderColor: dashboardData.securityEvents.length > 0 
+        ? ['#ff4d4f', '#faad14', '#52c41a']
+        : ['#d9d9d9'], // Borda um pouco mais escura
+      borderWidth: 1
     }]
   };
 
@@ -594,20 +725,94 @@ export default function Dashboard() {
     </div>
   );
 
-  const handleApiKeyChange = (option: { value: number, label: string } | null) => {
-    if (!option) {
-      sessionStorage.removeItem('selectedApiKey');
-      setDashboardData(initialDashboardData);
-      setSelectedApiKey(undefined);
-      setSelectedKeyName('');
-      return;
-    }
-    const value = option.value;
+  const handleApiKeyChange = (option: any) => {
+    const selectedKey = apiKeys.find(key => key.value === option.value);
+    setSelectedApiKey(option.value);
     setSelectedKeyName(option.label);
-    setSelectedApiKey(value);
-    sessionStorage.setItem('selectedApiKey', String(value));
-    fetchDashboardData(value);
+    if (selectedKey) {
+      setServiceType(selectedKey.service_type);
+      sessionStorage.setItem('serviceType', selectedKey.service_type);
+    }
+    sessionStorage.setItem('selectedApiKey', option.value.toString());
+    fetchDashboardData(option.value);
   };
+
+  const handleServiceTypeChange = (value: string) => {
+    setSelectedServiceType(value);
+    setSelectedApiKey(undefined);
+    setSelectedKeyName('');
+    sessionStorage.removeItem('selectedApiKey');
+    sessionStorage.removeItem('serviceType');
+  };
+
+  const renderProductDashboard = () => (
+    <div className="product-dashboard">
+      <div className="license-info-card">
+        <div className="license-header">
+          <h2>Informações da Licença</h2>
+          <div className="license-status">
+            <span className={dashboardData.availableLicenses > 0 ? 'active' : 'expired'}>
+              {dashboardData.availableLicenses > 0 ? 'Ativa' : 'Expirada'}
+            </span>
+          </div>
+        </div>
+
+        <div className="license-details">
+          <div className="license-stats">
+            <div className="stat-card">
+              <div className="stat-icon total">
+                <KeyOutlined />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Total de Licenças</span>
+                <span className="stat-value">{dashboardData.totalLicenses}</span>
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-icon used">
+                <UnlockOutlined />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Licenças em Uso</span>
+                <span className="stat-value">{dashboardData.usedLicenses}</span>
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-icon available">
+                <SafetyCertificateOutlined />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Licenças Disponíveis</span>
+                <span className="stat-value">{dashboardData.availableLicenses}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="license-expiry-info">
+            <div className="expiry-date">
+              <h3>Data de Expiração</h3>
+              <p>{dashboardData.expiryDate 
+                ? format(new Date(dashboardData.expiryDate), 'dd/MM/yyyy', { locale: ptBR })
+                : 'Não disponível'}</p>
+            </div>
+            <div className="usage-progress">
+              <h3>Utilização</h3>
+              <Progress 
+                percent={Math.round((dashboardData.usedLicenses / dashboardData.totalLicenses) * 100)} 
+                status={dashboardData.availableLicenses <= 0 ? 'exception' : 'active'}
+                strokeColor={{
+                  '0%': '#108ee9',
+                  '100%': '#87d068',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -623,15 +828,27 @@ export default function Dashboard() {
         <div className="header-title">
           <h1>Dashboard</h1>
         </div>
-        <div style={{ position: 'relative' }}>
+        <div className="header-selects">
           <Select
-            style={{ width: 200 }}
-            placeholder="Selecione uma chave API"
+            style={{ width: 200, marginRight: 16 }}
+            placeholder="Tipo de Serviço"
+            value={selectedServiceType}
+            onChange={handleServiceTypeChange}
+            options={SERVICE_TYPES}
+          />
+          <Select
+            style={{ width: 300 }}
+            placeholder="Selecione uma empresa"
             value={selectedApiKey ? { value: selectedApiKey, label: selectedKeyName } : undefined}
             labelInValue
-            fieldNames={{ label: 'name', value: 'id' }}
             onChange={handleApiKeyChange}
             options={apiKeys}
+            optionLabelProp="label"
+            optionFilterProp="label"
+            showSearch
+            filterOption={(input, option) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+            }
           />
         </div>
       </div>
@@ -661,119 +878,120 @@ export default function Dashboard() {
               fontSize: '24px',
               fontWeight: 500
             }}>
-              Selecione uma chave API para visualizar os dados
+              Selecione uma empresa para visualizar os dados
             </h2>
           </div>
         </div>
       ) : (
-        <div
-          style={{ position: 'relative' }}
-        >
+        <div style={{ position: 'relative' }}>
           {isDataLoading && <LoadingOverlay />}
-          <div className="dashboard-stats">
-            <div className="stat-card">
-              <div className="stat-icon endpoints">
-                <DesktopOutlined />
-              </div>
-              <div className="stat-info">
-                <span className="stat-label">Total de Máquinas</span>
-                <span className="stat-value">{dashboardData.totalEndpoints}</span>
-              </div>
-            </div>
-            
-            <div className="stat-card">
-              <div className="stat-icon licenses">
-                <KeyOutlined />
-              </div>
-              <div className="stat-info">
-                <span className="stat-label">Licenças Totais</span>
-                <span className="stat-value">{dashboardData.totalLicenses}</span>
-              </div>
-            </div>
+          
+          {serviceType === 'Produtos' ? (
+            renderProductDashboard()
+          ) : (
+            <>
+              <div className="dashboard-stats">
+                <div className="stat-card">
+                  <div className="stat-icon endpoints">
+                    <DesktopOutlined />
+                  </div>
+                  <div className="stat-info">
+                    <span className="stat-label">Total de Máquinas</span>
+                    <span className="stat-value">{dashboardData.totalEndpoints}</span>
+                  </div>
+                </div>
+                
+                <div className="stat-card">
+                  <div className="stat-icon licenses">
+                    <KeyOutlined />
+                  </div>
+                  <div className="stat-info">
+                    <span className="stat-label">Licenças Totais</span>
+                    <span className="stat-value">{dashboardData.totalLicenses}</span>
+                  </div>
+                </div>
 
-            <div className="stat-card">
-              <div className="stat-icon used">
-                <UnlockOutlined />
-              </div>
-              <div className="stat-info">
-                <span className="stat-label">Licenças Utilizadas</span>
-                <span className="stat-value">{dashboardData.usedLicenses}</span>
-              </div>
-            </div>
+                <div className="stat-card">
+                  <div className="stat-icon used">
+                    <UnlockOutlined />
+                  </div>
+                  <div className="stat-info">
+                    <span className="stat-label">Licenças Utilizadas</span>
+                    <span className="stat-value">{dashboardData.usedLicenses}</span>
+                  </div>
+                </div>
 
-            <div className="stat-card">
-              <div className="stat-icon available">
-                <SafetyCertificateOutlined />
+                <div className="stat-card">
+                  <div className="stat-icon available">
+                    <SafetyCertificateOutlined />
+                  </div>
+                  <div className="stat-info">
+                    <span className="stat-label">Licenças Disponíveis</span>
+                    <span className="stat-value">{dashboardData.availableLicenses}</span>
+                  </div>
+                </div>
               </div>
-              <div className="stat-info">
-                <span className="stat-label">Licenças Disponíveis</span>
-                <span className="stat-value">{dashboardData.availableLicenses}</span>
+
+              <div className="charts-container">
+                <div className="chart-card">
+                  <h3>Distribuição de Eventos por Tipo</h3>
+                  <Bar data={eventsChartData} options={chartOptions} />
+                </div>
+                <div className="chart-card">
+                  <h3>Eventos de Segurança por Severidade</h3>
+                  <Pie data={pieChartData} options={chartOptions} />
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div className="charts-container">
-            <div className="chart-card">
-              <h3>Distribuição de Eventos por Tipo</h3>
-              <Bar data={eventsChartData} options={chartOptions} />
-            </div>
-            <div className="chart-card">
-              <h3>Eventos de Segurança por Severidade</h3>
-              <Pie data={pieChartData} options={chartOptions} />
-            </div>
-          </div>
-
-          <div className="dashboard-content">
-            <div className="content-header">
-              <h2>Lista de Máquinas</h2>
-            </div>
-            
-            <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>Label</th>
-                    <th>Status</th>
-                    <th>IP</th>
-                    <th>Sistema Operacional</th>
-                    <th>Política</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashboardData.endpoints.map(endpoint => (
-                    <tr key={endpoint.endpoint_id}>
-                      <td>{endpoint.name}</td>
-                      <td>{endpoint.label || '-'}</td>
-                      <td>
-                        <span className={`status-badge ${getStatusText(endpoint.state).toLowerCase()}`}>
-                          {getStatusText(endpoint.state)}
-                        </span>
-                      </td>
-                      <td>{endpoint.ip_address}</td>
-                      <td>{endpoint.operating_system}</td>
-                      <td>
-                        <span className={`policy-badge ${endpoint.policy_applied ? 'applied' : 'pending'}`}>
-                          {endpoint.policy_name}
-                        </span>
-                      </td>
-                      <td>
-                        <button 
-                          className="action-button"
-                          onClick={() => handleViewDetails(endpoint)}
-                        >
-                          Detalhes
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+              <div className="dashboard-content">
+                <div className="content-header">
+                  <h2>Lista de Máquinas</h2>
+                </div>
+                
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Nome</th>
+                        <th>Label</th>
+                        <th>Status</th>
+                        <th>IP</th>
+                        <th>Sistema Operacional</th>
+                        <th>Política</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dashboardData.endpoints.map(endpoint => (
+                        <tr key={endpoint.endpoint_id}>
+                          <td>{endpoint.name}</td>
+                          <td>{endpoint.label || '-'}</td>
+                          <td>
+                            <span className={`status-badge ${getStatusText(endpoint.state).toLowerCase()}`}>
+                              {getStatusText(endpoint.state)}
+                            </span>
+                          </td>
+                          <td>{endpoint.ip_address}</td>
+                          <td>{endpoint.operating_system}</td>
+                          <td>
+                            <span className={`policy-badge ${endpoint.policy_applied ? 'applied' : 'pending'}`}>
+                              {endpoint.policy_name}
+                            </span>
+                          </td>
+                          <td>
+                            {renderActionButtons(endpoint)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
+      {renderScanModal()}
     </div>
   );
 }

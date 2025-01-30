@@ -10,7 +10,7 @@ export const syncService = {
           api_key_id: apiKeyId,
           ...(type && { type })
         },
-        id: 1
+        id: null
       });
       return response.data;
     } catch (error) {
@@ -19,10 +19,15 @@ export const syncService = {
     }
   },
 
-  async getApiKeys() {
+  async getApiKeys(type = 'all') {
     try {
-      const response = await api.get('/apikeys/list');
-      return response.data.result;
+      const response = await api.get('/apikeys/list', {
+        params: { type }
+      });
+      
+      console.log('API Keys Response:', response.data); // Debug
+      return response.data.result || [];
+      
     } catch (error) {
       console.error('Error fetching API keys:', error);
       throw error;
@@ -31,11 +36,18 @@ export const syncService = {
 
   async syncMachines() {
     try {
-      const response = await api.post('/sync/all');
+      const response = await api.post('/sync/all', {
+        jsonrpc: '2.0',
+        method: 'syncAll',
+        params: {},
+        id: null
+      });
       return response.data.result;
     } catch (error) {
       console.error('Error syncing machines:', error);
       throw error;
     }
   }
-}; 
+};
+
+export default syncService; 

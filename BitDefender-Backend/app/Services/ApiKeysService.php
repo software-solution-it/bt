@@ -14,14 +14,31 @@ class ApiKeysService
         $this->apiKeysModel = new ApiKeysModel();
     }
 
-    public function getAllKeys()
+    public function getAllKeys($type = 'all')
     {
         try {
-            Logger::debug('ApiKeysService::getAllKeys called');
-            return $this->apiKeysModel->getAllKeys();
+            Logger::debug('ApiKeysService::getAllKeys called', [
+                'type' => $type
+            ]);
+            
+            $keys = $this->apiKeysModel->getAllKeys($type);
+            
+            return array_map(function($key) {
+                return [
+                    'id' => $key['id'],
+                    'name' => $key['name'],
+                    'company_name' => $key['company_name'] ?? $key['name'],
+                    'service_type' => $key['service_type'],
+                    'is_active' => (bool)$key['is_active'],
+                    'created_at' => $key['created_at'],
+                    'updated_at' => $key['updated_at']
+                ];
+            }, $keys);
+            
         } catch (\Exception $e) {
             Logger::error('Error getting all API keys', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'type' => $type
             ]);
             throw $e;
         }

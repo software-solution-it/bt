@@ -218,18 +218,21 @@ class MachineModel extends Model
 
             $tableQueries = [
                 'accounts' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM accounts WHERE api_key_id = ?";
+                    $query = "SELECT a.*, std.type as service_type 
+                             FROM accounts a
+                             LEFT JOIN api_keys ak ON a.api_key_id = ak.id
+                             LEFT JOIN service_type_domain std ON ak.service_type_id = std.id
+                             WHERE a.api_key_id = ?";
                     $params = [$apiKeyId];
                     
                     if (isset($filters['account_type'])) {
-                        $query .= " AND type = ?";
+                        $query .= " AND a.type = ?";
                         $params[] = $filters['account_type'];
                     }
                     
                     $stmt = $this->db->prepare($query);
                     $stmt->execute($params);
-                    $result = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-                    return $this->decodeJsonFields($result);
+                    return $stmt->fetchAll(\PDO::FETCH_ASSOC);
                 },
                 
                 'custom_groups' => function() use ($apiKeyId, $filters) {
@@ -300,17 +303,44 @@ class MachineModel extends Model
                 },
                 
                 'licenses' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM licenses WHERE api_key_id = ?";
+                    $query = "SELECT l.*, 
+                             ak.name as company_name, 
+                             std.type as service_type,
+                             c.id as company_id,
+                             c.name as company_full_name
+                             FROM licenses l
+                             LEFT JOIN api_keys ak ON l.api_key_id = ak.id
+                             LEFT JOIN service_type_domain std ON ak.service_type_id = std.id
+                             LEFT JOIN companies c ON l.api_key_id = c.api_key_id
+                             WHERE l.api_key_id = ?";
                     $params = [$apiKeyId];
                     
                     if (isset($filters['license_type'])) {
-                        $query .= " AND type = ?";
+                        $query .= " AND l.type = ?";
                         $params[] = $filters['license_type'];
                     }
                     
                     $stmt = $this->db->prepare($query);
                     $stmt->execute($params);
-                    return $stmt->fetchAll();
+                    $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+                    // Formata os dados da licença incluindo informações da empresa
+                    return array_map(function($license) {
+                        return [
+                            'id' => $license['id'],
+                            'api_key_id' => $license['api_key_id'],
+                            'name' => $license['company_name'], // Nome da chave/empresa
+                            'company_id' => $license['company_id'], // ID da empresa
+                            'company_name' => $license['company_full_name'], // Nome completo da empresa
+                            'license_key' => $license['license_key'],
+                            'expiry_date' => $license['expiry_date'],
+                            'used_slots' => $license['used_slots'],
+                            'total_slots' => $license['total_slots'],
+                            'service_type' => $license['service_type'],
+                            'created_at' => $license['created_at'],
+                            'updated_at' => $license['updated_at']
+                        ];
+                    }, $results);
                 },
                 
                 'network_inventory' => function() use ($apiKeyId, $filters) {
@@ -335,6 +365,7 @@ class MachineModel extends Model
                 
                 'machines' => function() use ($apiKeyId, $filters) {
                     $query = "SELECT m.*, 
+                        p.name as policy_name, p.settings as policy_settings,
                         (SELECT JSON_ARRAYAGG(
                             JSON_OBJECT(
                                 'id', w.id,
@@ -356,6 +387,7 @@ class MachineModel extends Model
                         ORDER BY w.created_at DESC
                         LIMIT 100) as webhook_events
                     FROM machines m 
+                    LEFT JOIN policies p ON m.policy_id = p.id AND m.api_key_id = p.api_key_id
                     WHERE m.api_key_id = ?";
                     
                     $params = [$apiKeyId];
@@ -374,13 +406,18 @@ class MachineModel extends Model
                     $stmt->execute($params);
                     $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
-                    // Decodifica os eventos do webhook
+                    // Decodifica os eventos do webhook e configurações da política
                     return array_map(function($row) {
                         if (isset($row['webhook_events']) && is_string($row['webhook_events'])) {
                             $row['webhook_events'] = json_decode($row['webhook_events'], true) ?? [];
                         } else {
                             $row['webhook_events'] = [];
                         }
+                        
+                        if (isset($row['policy_settings']) && is_string($row['policy_settings'])) {
+                            $row['policy_settings'] = json_decode($row['policy_settings'], true) ?? [];
+                        }
+                        
                         return $row;
                     }, $results);
                 },
@@ -538,7 +575,7 @@ class MachineModel extends Model
             ];
 
             return $result;
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             Logger::error('Error getting inventory', [
                 'error' => $e->getMessage(),
                 'apiKey' => substr($apiKey, 0, 10) . '...'

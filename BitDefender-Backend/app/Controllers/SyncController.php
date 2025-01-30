@@ -23,17 +23,15 @@ class SyncController extends Controller
                 'params' => $params
             ]);
 
-            // Verifique se o api_key_id está presente
             if (!isset($params['api_key_id'])) {
                 throw new \Exception('API Key ID is required');
             }
 
             $result = $this->syncService->syncAll($params);
             
-            // Ensure we're returning a properly formatted response
             return json_encode([
                 'jsonrpc' => '2.0',
-                'result' => $result, 
+                'result' => $result,
                 'id' => $params['id'] ?? null
             ]);
 
@@ -49,7 +47,8 @@ class SyncController extends Controller
                     'code' => -32603,
                     'message' => 'Internal error',
                     'data' => [
-                        'details' => $e->getMessage()
+                        'details' => $e->getMessage(),
+                        'sync_errors' => $result['sync_errors'] ?? null
                     ]
                 ],
                 'id' => $params['id'] ?? null

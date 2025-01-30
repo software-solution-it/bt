@@ -52,7 +52,7 @@ class CompaniesModel extends Model
             $companyData = [
                 'id' => $apiData['id'] ?? '1',
                 'api_key_id' => $apiKeyId,
-                'name' => $apiData['name'],
+                'name' => $apiData['name'] ?? 'Default Company',
                 'address' => $apiData['address'] ?? null,
                 'phone' => $apiData['phone'] ?? null,
                 'country' => $apiData['country'] ?? null,
@@ -62,12 +62,19 @@ class CompaniesModel extends Model
                 'timezone' => $apiData['timezone'] ?? null
             ];
 
+            Logger::info('Syncing company data', [
+                'company_id' => $companyData['id'],
+                'api_key_id' => $apiKeyId
+            ]);
+
             $existingCompany = $this->find($companyData['id']);
 
             if ($existingCompany) {
                 $this->update($companyData['id'], $companyData);
+                Logger::info('Updated existing company');
             } else {
                 $this->create($companyData);
+                Logger::info('Created new company');
             }
 
             $this->db->commit();
@@ -76,7 +83,8 @@ class CompaniesModel extends Model
         } catch (\Exception $e) {
             $this->db->rollBack();
             Logger::error('Failed to sync company with API', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'api_key_id' => $apiKeyId
             ]);
             throw $e;
         }

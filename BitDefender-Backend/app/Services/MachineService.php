@@ -8,17 +8,20 @@ use App\Core\Logger;
 use App\Model\ApiKeysModel;
 use App\Model\MachineModel;
 use GuzzleHttp\Promise\Promise;
+use App\Model\PoliciesModel;
 
 class MachineService extends Service
 {
     private $networkModel;
     private $machineModel;
     private $memoryCache = [];
+    private $policiesModel;
 
     public function __construct()
     {
         $this->networkModel = new NetworkModel();
         $this->machineModel = new MachineModel();
+        $this->policiesModel = new PoliciesModel();
     }
 
     public function getMachineInventory($params)
@@ -129,6 +132,19 @@ class MachineService extends Service
 
                 // Garante que state é sempre um número
                 $details['state'] = (int)$details['state'];
+
+                // Adiciona informações da política
+                if (isset($item['policy_id'])) {
+                    $policyDetails = $this->policiesModel->find($item['policy_id']);
+                    if ($policyDetails) {
+                        $item['details']['policy'] = [
+                            'id' => $policyDetails['id'],
+                            'name' => $policyDetails['name'],
+                            'settings' => json_decode($policyDetails['settings'], true) ?? [],
+                            'last_updated' => $policyDetails['last_updated']
+                        ];
+                    }
+                }
 
                 // Substitui o campo details original pelos dados organizados
                 $item['details'] = $details;
