@@ -18,8 +18,6 @@ use App\Config\Environment;
 
 Environment::load(__DIR__ . '/.env');
 
-Logger::init();
-
 ExceptionHandler::register();
 
 $router = new Router();
