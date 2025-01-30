@@ -18,108 +18,63 @@ class WebhookService extends Service
         $this->networkModel = new NetworkModel();
     }
 
-    public function processEvent($params)
+    public function processEvent($data)
     {
         try {
             Logger::debug('Processing webhook event', [
-                'params' => $params
+                'data' => $data
             ]);
 
-            if (!isset($params['params']['events'])) {
-                throw new \Exception('No events found in webhook payload');
+            if (!isset($data['events']) || !is_array($data['events'])) {
+                throw new \Exception('Invalid event format');
             }
 
-            $results = [];
-            foreach ($params['params']['events'] as $event) {
-                // Extrai o endpoint_id do evento baseado no tipo
-                $endpointId = $this->getEndpointId($event);
-                
-                // Busca o endpoint relacionado
-                $endpoint = null;
-                if ($endpointId) {
-                    $endpoint = $this->networkModel->findEndpoint($endpointId);
+            $processedEvents = 0;
+            foreach ($data['events'] as $event) {
+                // Validar campos obrigatórios
+                if (!isset($event['computer_name']) || !isset($event['module'])) {
+                    Logger::info('Skipping invalid event', ['event' => $event]);
+                    continue;
                 }
 
-                // Prepara os dados do evento
+                // Preparar dados para inserção
                 $eventData = [
-                    'endpoint_id' => $endpointId,
-                    'api_key_id' => $endpoint['api_key_id'] ?? null,
+                    'endpoint_id' => $event['computer_id'] ?? null,
+                    'computer_name' => $event['computer_name'],
+                    'computer_ip' => $event['computer_ip'] ?? null,
                     'event_type' => $event['module'],
                     'event_data' => json_encode($event),
                     'severity' => $this->determineSeverity($event),
-                    'status' => 'new',
-                    'computer_name' => $event['computer_name'] ?? $event['computerName'] ?? null,
-                    'computer_ip' => $event['computer_ip'] ?? $event['computerIp'] ?? null,
+                    'status' => 'pending',
                     'created_at' => date('Y-m-d H:i:s')
                 ];
 
-                // Salva o evento
-                $eventId = $this->webhookModel->saveEvent($eventData);
-
-                $results[] = [
-                    'event_id' => $eventId,
-                    'endpoint_id' => $endpointId,
-                    'event_type' => $eventData['event_type']
-                ];
-
-                Logger::info('Webhook event processed', [
-                    'event_id' => $eventId,
-                    'event_type' => $event['module']
-                ]);
+                // Usar o webhookModel ao invés de inserir diretamente
+                $this->webhookModel->saveEvent($eventData);
+                $processedEvents++;
             }
 
             return [
-                'status' => 'success',
-                'processed_events' => $results
+                'processed_events' => $processedEvents
             ];
 
         } catch (\Exception $e) {
             Logger::error('Failed to process webhook event', [
                 'error' => $e->getMessage(),
-                'params' => $params
+                'trace' => $e->getTraceAsString()
             ]);
-            throw $e;
+            throw $e; 
         }
-    }
-
-    private function getEndpointId($event)
-    {
-        return $event['endpointId'] ?? 
-               $event['computer_id'] ?? 
-               null;
     }
 
     private function determineSeverity($event)
     {
-        switch ($event['module']) {
-            case 'av':
-                if (isset($event['malware_type']) && 
-                    in_array($event['malware_type'], ['ransomware', 'exploit'])) {
-                    return 'high';
-                }
-                return 'medium';
-
-            case 'network-sandboxing':
-            case 'avc':
-            case 'hd':
-                return 'high';
-
-            case 'fw':
-            case 'aph':
-            case 'dp':
-            case 'exchange-malware':
-                return 'medium';
-
-            case 'modules':
-            case 'registration':
-            case 'task-status':
-            case 'sva':
-            case 'sva-load':
-            case 'supa-update-status':
-                return 'low';
-
-            default:
-                return 'info'; 
+        // Lógica para determinar a severidade baseada no tipo de evento
+        if (isset($event['_testEvent_']) && $event['_testEvent_'] === true) {
+            return 'low';
         }
+        
+        // Adicione mais lógica de severidade aqui
+        return 'medium';
     }
 } 
