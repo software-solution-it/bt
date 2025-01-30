@@ -12,7 +12,7 @@ export default defineConfig({
     host: true,
     proxy: {
       '^/auth/|^/api/': {  // Apenas rotas que começam com /auth ou /api
-        target: 'http://https://api-sd.m3solutions.net.br',
+        target: 'https://api-sd.m3solutions.net.br',
         changeOrigin: true,
         secure: false,
         configure: (proxy, options) => {
