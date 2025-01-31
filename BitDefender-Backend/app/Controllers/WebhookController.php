@@ -59,4 +59,45 @@ class WebhookController extends Controller
             ];
         }
     }
+
+    public function updateSettings($params)
+    {
+        try {
+            if (!isset($params['api_key_id'])) {
+                throw new \Exception('API Key ID is required');
+            }
+
+            $settings = [
+                'jsonrpc' => '2.0',
+                'method' => 'updateWebhookSettings',
+                'params' => [
+                    'serviceSettings' => [
+                        'url' => 'https://api-sd.m3solutions.net.br/webhook',
+                        'requireValidSslCertificate' => true
+                    ],
+                    'serviceType' => 'jsonRPC',
+                    'status' => 1,
+                    'subscribeToEventTypes' => [
+                        'task-status' => true,  // Para eventos de scan
+                        'modules' => true,
+                        'sva' => true,
+                        'registration' => true,
+                        'av' => true,
+                        'aph' => true,
+                        'fw' => true,
+                        'avc' => true
+                    ]
+                ]
+            ];
+
+            $response = $this->webhookService->makeApiCall($params['api_key_id'], $settings);
+            return ['success' => true, 'data' => $response];
+
+        } catch (\Exception $e) {
+            Logger::error('Failed to update webhook settings', [
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
 } 

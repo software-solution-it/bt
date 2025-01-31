@@ -248,7 +248,6 @@ if (count($uri) >= 1) {
             case 'webhook':
                 $router->addRoute('POST', 'webhook', 'WebhookController', 'addEvents');
                 $router->addRoute('POST', 'webhook/addEvents', 'WebhookController', 'addEvents');
-                $router->addRoute('GET', 'webhook', 'WebhookController', 'getEvents');
                 $routeRegistered = true;
                 break;
 

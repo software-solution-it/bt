@@ -6,6 +6,8 @@ use App\Core\Service;
 use App\Core\Logger;
 use App\Model\WebhookModel;
 use App\Model\NetworkModel;
+use App\Model\ApiKeysModel;
+use App\Config\Environment;
 
 class WebhookService extends Service
 {
@@ -45,11 +47,9 @@ class WebhookService extends Service
                     'event_type' => $event['module'],
                     'event_data' => json_encode($event),
                     'severity' => $this->determineSeverity($event),
-                    'status' => 'pending',
                     'created_at' => date('Y-m-d H:i:s')
                 ];
 
-                // Usar o webhookModel ao invés de inserir diretamente
                 $this->webhookModel->saveEvent($eventData);
                 $processedEvents++;
             }
@@ -76,5 +76,28 @@ class WebhookService extends Service
         
         // Adicione mais lógica de severidade aqui
         return 'medium';
+    }
+
+    public function makeApiCall($apiKeyId, $data)
+    {
+        try {
+            $client = new \GuzzleHttp\Client([
+                'base_uri' => Environment::get('BITDEFENDER_API_URL'),
+                'verify' => false
+            ]);
+
+            $response = $client->post('/webhook/settings', [
+                'json' => $data,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
+                ]
+            ]);
+
+            return json_decode($response->getBody(), true);
+        } catch (\Exception $e) {
+            Logger::error('Webhook settings update failed', ['error' => $e->getMessage()]);
+            throw $e;
+        }
     }
 } 

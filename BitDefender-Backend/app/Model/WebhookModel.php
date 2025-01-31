@@ -25,7 +25,6 @@ class WebhookModel extends Model
                 event_type VARCHAR(50) NOT NULL,
                 event_data JSON NOT NULL,
                 severity ENUM('low', 'medium', 'high', 'info') DEFAULT 'info',
-                status ENUM('new', 'processing', 'processed', 'failed') DEFAULT 'new',
                 computer_name VARCHAR(255) NULL,
                 computer_ip VARCHAR(45) NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -34,7 +33,6 @@ class WebhookModel extends Model
                 INDEX idx_endpoint (endpoint_id),
                 INDEX idx_event_type (event_type),
                 INDEX idx_severity (severity),
-                INDEX idx_status (status),
                 INDEX idx_created_at (created_at),
                 FOREIGN KEY (endpoint_id) REFERENCES endpoints(endpoint_id),
                 INDEX idx_machine (computer_name),
@@ -55,24 +53,48 @@ class WebhookModel extends Model
     public function saveEvent($eventData)
     {
         try {
-            Logger::info('Saving webhook event', ['data' => $eventData]); // Debug log
+            Logger::info('Saving webhook event', ['data' => $eventData]);
 
-            // Garantir que todos os campos necessários existam
+            // Extrair taskId do event_data se existir
+            $eventDataDecoded = json_decode($eventData['event_data'], true);
+            $taskId = $eventDataDecoded['taskId'] ?? null;
+
+            // Preparar dados base
             $data = [
                 'endpoint_id' => $eventData['endpoint_id'] ?? null,
                 'event_type' => $eventData['event_type'],
                 'event_data' => $eventData['event_data'],
                 'severity' => $eventData['severity'],
-                'status' => $eventData['status'],
                 'computer_name' => $eventData['computer_name'],
                 'computer_ip' => $eventData['computer_ip'],
                 'created_at' => $eventData['created_at']
             ];
 
+            if ($taskId && $eventData['event_type'] === 'task-status') {
+                // Tentar atualizar evento existente
+                $sql = "UPDATE {$this->table} 
+                       SET event_data = :event_data,
+                           severity = :severity,
+                           computer_ip = :computer_ip,
+                           created_at = :created_at
+                       WHERE event_type = :event_type 
+                       AND computer_name = :computer_name
+                       AND endpoint_id = :endpoint_id
+                       AND JSON_EXTRACT(event_data, '$.taskId') = :taskId";
+
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute(array_merge($data, ['taskId' => $taskId]));
+
+                if ($stmt->rowCount() > 0) {
+                    return $this->db->lastInsertId();
+                }
+            }
+
+            // Se não houver taskId ou não encontrou registro para atualizar, insere novo
             $sql = "INSERT INTO {$this->table} 
-                (endpoint_id, event_type, event_data, severity, status, computer_name, computer_ip, created_at)
+                (endpoint_id, event_type, event_data, severity, computer_name, computer_ip, created_at)
                 VALUES 
-                (:endpoint_id, :event_type, :event_data, :severity, :status, :computer_name, :computer_ip, :created_at)";
+                (:endpoint_id, :event_type, :event_data, :severity, :computer_name, :computer_ip, :created_at)";
 
             $stmt = $this->db->prepare($sql);
             $stmt->execute($data);
