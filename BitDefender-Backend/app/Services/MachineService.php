@@ -286,21 +286,44 @@ class MachineService extends Service
     public function getAllInventoryData($params)
     {
         try {
+            $machineModel = new MachineModel();
+            
+            Logger::info('MachineService::getAllInventoryData - Início', [
+                'params' => $params
+            ]);
+
+            // Se for apenas o api_key_id, converte para array
+            if (!is_array($params)) {
+                $params = ['api_key_id' => $params];
+            }
+
+            // Garante que temos um api_key_id
             if (!isset($params['api_key_id'])) {
                 throw new \Exception('API Key ID is required');
             }
 
-            Logger::debug('MachineService::getAllInventoryData called', [
-                'api_key_id' => $params['api_key_id']
+            $result = $machineModel->getAllInventoryData($params);
+
+            Logger::info('MachineService::getAllInventoryData - Resultado do modelo', [
+                'tipo' => gettype($result),
+                'estrutura' => is_array($result) ? array_keys($result) : 'não é array'
             ]);
 
-            $result = $this->machineModel->getAllInventoryData($params['api_key_id']);
+            // Se for uma tabela específica, retorna direto
+            if (isset($params['tables']) && !empty($params['tables'])) {
+                $table = $params['tables'][0];
+                return [
+                    $table => $result
+                ];
+            }
 
+            // Se for todas as tabelas, mantém a estrutura
             return $result;
 
         } catch (\Exception $e) {
             Logger::error('Failed to get all inventory data', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             throw $e;
         }

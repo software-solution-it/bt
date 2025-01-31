@@ -62,6 +62,61 @@ class MachineModel extends Model
 
             $this->db->exec($sql);
             
+            // Tabela de quarentena
+            $this->db->exec("CREATE TABLE IF NOT EXISTS quarantine (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                api_key_id INT NOT NULL,
+                endpoint_id VARCHAR(24) NULL,
+                threat_type VARCHAR(50) NOT NULL,
+                threat_name VARCHAR(255) NOT NULL,
+                file_path TEXT NULL,
+                severity VARCHAR(20) NOT NULL,
+                status VARCHAR(20) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_api_key (api_key_id),
+                INDEX idx_endpoint (endpoint_id),
+                INDEX idx_severity (severity),
+                INDEX idx_status (status),
+                INDEX idx_created (created_at),
+                FOREIGN KEY (api_key_id) REFERENCES api_keys(id),
+                FOREIGN KEY (endpoint_id) REFERENCES endpoints(endpoint_id)
+            )");
+
+            // Tabela de scan_tasks se não existir
+            $this->db->exec("CREATE TABLE IF NOT EXISTS scan_tasks (
+                id VARCHAR(24) PRIMARY KEY,
+                api_key_id INT NOT NULL,
+                endpoint_id VARCHAR(24) NULL,
+                name VARCHAR(255) NOT NULL,
+                status INT NOT NULL DEFAULT 1,
+                scan_type VARCHAR(50) NULL,
+                start_date TIMESTAMP NULL,
+                end_date TIMESTAMP NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_api_key (api_key_id),
+                INDEX idx_endpoint (endpoint_id),
+                INDEX idx_status (status),
+                INDEX idx_created (created_at),
+                FOREIGN KEY (api_key_id) REFERENCES api_keys(id),
+                FOREIGN KEY (endpoint_id) REFERENCES endpoints(endpoint_id)
+            )");
+
+            // Tabela de policies se não existir
+            $this->db->exec("CREATE TABLE IF NOT EXISTS policies (
+                id VARCHAR(24) PRIMARY KEY,
+                api_key_id INT NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'active',
+                settings JSON NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_api_key (api_key_id),
+                INDEX idx_status (status),
+                FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
+            )");
+
         } catch (\Exception $e) {
             Logger::error('Failed to create machines table', [
                 'error' => $e->getMessage(),
@@ -190,322 +245,182 @@ class MachineModel extends Model
         }
     }
 
+    private function getTableQueries()
+    {
+        return [
+            'endpoints' => function($apiKeyId, $filters) {
+                $query = "SELECT e.endpoint_id, e.name, e.group_id, e.api_key_id, 
+                         e.is_managed, e.status, e.ip_address, e.mac_address, 
+                         e.operating_system, e.operating_system_version, e.label, 
+                         e.last_seen, e.machine_type, e.company_id, e.group_name, 
+                         e.policy_id, e.policy_name, e.policy_applied, e.malware_status, 
+                         e.agent_info, e.state, e.modules, e.managed_with_best, 
+                         e.risk_score, e.fqdn, e.macs, e.ssid, e.created_at, e.updated_at
+                         FROM endpoints e 
+                         WHERE e.api_key_id = ?";
+                $params = [$apiKeyId];
+
+                if (isset($filters['endpoint_status'])) {
+                    $query .= " AND e.status = ?";
+                    $params[] = $filters['endpoint_status'];
+                }
+                if (isset($filters['endpoint_name'])) {
+                    $query .= " AND e.name LIKE ?";
+                    $params[] = "%{$filters['endpoint_name']}%";
+                }
+                if (isset($filters['endpoint_group'])) {
+                    $query .= " AND e.group_id = ?";
+                    $params[] = $filters['endpoint_group'];
+                }
+                if (isset($filters['endpoint_policy'])) {
+                    $query .= " AND e.policy_id = ?";
+                    $params[] = $filters['endpoint_policy'];
+                }
+                if (isset($filters['operating_system'])) {
+                    $query .= " AND e.operating_system LIKE ?";
+                    $params[] = "%{$filters['operating_system']}%";
+                }
+
+                return $this->executeQuery($query, $params);
+            },
+
+            'licenses' => function($apiKeyId, $filters) {
+                $query = "SELECT l.id, l.api_key_id, l.license_key, l.is_addon, 
+                         l.expiry_date, l.used_slots, l.total_slots, 
+                         l.subscription_type, l.own_use, l.resell, 
+                         l.created_at, l.updated_at,
+                         ak.name as company_name
+                         FROM licenses l
+                         LEFT JOIN api_keys ak ON l.api_key_id = ak.id
+                         WHERE l.api_key_id = ?";
+                $params = [$apiKeyId];
+
+                if (isset($filters['expiry_date_from'])) {
+                    $query .= " AND l.expiry_date >= ?";
+                    $params[] = $filters['expiry_date_from'];
+                }
+                if (isset($filters['expiry_date_to'])) {
+                    $query .= " AND l.expiry_date <= ?";
+                    $params[] = $filters['expiry_date_to'];
+                }
+                
+                return $this->executeQuery($query, $params);
+            },
+
+            'policies' => function($apiKeyId, $filters) {
+                $query = "SELECT p.id, p.policy_id, p.api_key_id, p.name, p.settings, 
+                         p.created_at, p.updated_at
+                         FROM policies p
+                         WHERE p.api_key_id = ?";
+                $params = [$apiKeyId];
+
+                if (isset($filters['policy_name'])) {
+                    $query .= " AND p.name LIKE ?";
+                    $params[] = "%{$filters['policy_name']}%";
+                }
+
+                return $this->executeQuery($query, $params);
+            },
+
+            'webhook_events' => function($apiKeyId, $filters) {
+                $query = "SELECT w.id, w.endpoint_id, w.event_type, w.event_data, 
+                         w.severity, w.status, w.computer_name, w.computer_ip,
+                         w.created_at, w.processed_at, w.error_message
+                         FROM webhook_events w
+                         JOIN endpoints e ON w.endpoint_id = e.endpoint_id
+                         WHERE e.api_key_id = ?
+                         ORDER BY w.created_at DESC";
+                $params = [$apiKeyId];
+
+                return $this->executeQuery($query, $params);
+            },
+
+            'companies' => function($apiKeyId, $filters) {
+                $query = "SELECT c.id, c.api_key_id, c.name, c.address, c.phone, 
+                         c.country, c.state, c.city, c.postal_code, c.timezone,
+                         c.created_at, c.updated_at
+                         FROM companies c
+                         WHERE c.api_key_id = ?";
+                $params = [$apiKeyId];
+
+                return $this->executeQuery($query, $params);
+            },
+
+            'accounts' => function($apiKeyId, $filters) {
+                $query = "SELECT a.id, a.api_key_id, a.email, a.full_name, a.role, 
+                         a.rights, a.language, a.timezone, a.created_at, a.updated_at
+                         FROM accounts a
+                         WHERE a.api_key_id = ?";
+                $params = [$apiKeyId];
+
+                return $this->executeQuery($query, $params);
+            }
+        ];
+    }
+
+    private function executeQuery($query, $params) 
+    {
+        $stmt = $this->db->prepare($query);
+        $stmt->execute($params);
+        $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        return $this->decodeJsonFields($results);
+    }
+
     public function getAllInventoryData($params)
     {
         try {
-            $results = [];
             $apiKeyId = is_array($params) ? $params['api_key_id'] : $params;
-            $tables = is_array($params) && isset($params['tables']) ? $params['tables'] : [
-                'network_inventory',
-                'machines',
-                'accounts',
-                'custom_groups',
-                'endpoints',
-                'licenses',
-                'packages',
-                'policies',
-                'quarantine',
-                'installation_links',
-                'scan_tasks'
-            ];
+            $requestedTable = is_array($params) && isset($params['tables']) ? $params['tables'][0] : null;
             $filters = is_array($params) && isset($params['filters']) ? $params['filters'] : [];
-            
-            Logger::info('getAllInventoryData called with params', [
+
+            Logger::info('MachineModel::getAllInventoryData - Início', [
                 'api_key_id' => $apiKeyId,
-                'tables' => $tables,
+                'requested_table' => $requestedTable,
                 'filters' => $filters
             ]);
 
-            $tableQueries = [
-                'accounts' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT a.*, std.type as service_type 
-                             FROM accounts a
-                             LEFT JOIN api_keys ak ON a.api_key_id = ak.id
-                             LEFT JOIN service_type_domain std ON ak.service_type_id = std.id
-                             WHERE a.api_key_id = ?";
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['account_type'])) {
-                        $query .= " AND a.type = ?";
-                        $params[] = $filters['account_type'];
-                    }
-                    
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    return $stmt->fetchAll(\PDO::FETCH_ASSOC);
-                },
-                
-                'custom_groups' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM custom_groups WHERE api_key_id = ?";
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['group_name'])) {
-                        $query .= " AND name LIKE ?";
-                        $params[] = "%{$filters['group_name']}%";
-                    }
-                    
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    return $stmt->fetchAll();
-                },
-                
-                'endpoints' => function() use ($apiKeyId, $filters) {
-                    // Primeiro, busca os endpoints
-                    $query = "SELECT e.*, 
-                        (SELECT JSON_ARRAYAGG(
-                            JSON_OBJECT(
-                                'id', w.id,
-                                'endpoint_id', w.endpoint_id,
-                                'event_type', w.event_type,
-                                'event_data', w.event_data,
-                                'severity', w.severity,
-                                'status', w.status,
-                                'computer_name', w.computer_name,
-                                'computer_ip', w.computer_ip,
-                                'created_at', w.created_at,
-                                'processed_at', w.processed_at,
-                                'error_message', w.error_message
-                            )
-                        )
-                        FROM webhook_events w 
-                        WHERE w.endpoint_id = e.endpoint_id
-                        ORDER BY w.created_at DESC
-                        LIMIT 100) as webhook_events
-                    FROM endpoints e 
-                    WHERE e.api_key_id = ?";
-                    
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['endpoint_status'])) {
-                        $query .= " AND e.status = ?";
-                        $params[] = $filters['endpoint_status'];
-                    }
-                    
-                    Logger::debug('Executing endpoints query', [
-                        'api_key_id' => $apiKeyId,
-                        'has_status_filter' => isset($filters['endpoint_status'])
-                    ]);
+            $tableQueries = $this->getTableQueries();
 
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-
-                    // Decodifica os eventos do webhook
-                    return array_map(function($row) {
-                        if (isset($row['webhook_events']) && is_string($row['webhook_events'])) {
-                            $row['webhook_events'] = json_decode($row['webhook_events'], true) ?? [];
-                        } else {
-                            $row['webhook_events'] = [];
-                        }
-                        return $row;
-                    }, $results);
-                },
-                
-                'licenses' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT l.*, 
-                             ak.name as company_name, 
-                             std.type as service_type,
-                             c.id as company_id,
-                             c.name as company_full_name
-                             FROM licenses l
-                             LEFT JOIN api_keys ak ON l.api_key_id = ak.id
-                             LEFT JOIN service_type_domain std ON ak.service_type_id = std.id
-                             LEFT JOIN companies c ON l.api_key_id = c.api_key_id
-                             WHERE l.api_key_id = ?";
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['license_type'])) {
-                        $query .= " AND l.type = ?";
-                        $params[] = $filters['license_type'];
-                    }
-                    
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-
-                    // Formata os dados da licença incluindo informações da empresa
-                    return array_map(function($license) {
-                        return [
-                            'id' => $license['id'],
-                            'api_key_id' => $license['api_key_id'],
-                            'name' => $license['company_name'], // Nome da chave/empresa
-                            'company_id' => $license['company_id'], // ID da empresa
-                            'company_name' => $license['company_full_name'], // Nome completo da empresa
-                            'license_key' => $license['license_key'],
-                            'expiry_date' => $license['expiry_date'],
-                            'used_slots' => $license['used_slots'],
-                            'total_slots' => $license['total_slots'],
-                            'service_type' => $license['service_type'],
-                            'created_at' => $license['created_at'],
-                            'updated_at' => $license['updated_at']
-                        ];
-                    }, $results);
-                },
-                
-                'network_inventory' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM network_inventory WHERE api_key_id = ?";
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['status'])) {
-                        $query .= " AND status = ?";
-                        $params[] = $filters['status'];
-                    }
-                    
-                    if (isset($filters['group_id'])) {
-                        $query .= " AND group_id = ?";
-                        $params[] = $filters['group_id'];
-                    }
-                    
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    $result = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-                    return $this->decodeJsonFields($result);
-                },
-                
-                'machines' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT m.*, 
-                        p.name as policy_name, p.settings as policy_settings,
-                        (SELECT JSON_ARRAYAGG(
-                            JSON_OBJECT(
-                                'id', w.id,
-                                'endpoint_id', w.endpoint_id,
-                                'event_type', w.event_type,
-                                'event_data', w.event_data,
-                                'severity', w.severity,
-                                'computer_name', w.computer_name,
-                                'computer_ip', w.computer_ip,
-                                'created_at', w.created_at,
-                                'processed_at', w.processed_at,
-                                'error_message', w.error_message
-                            )
-                        )
-                        FROM webhook_events w 
-                        INNER JOIN endpoints e ON w.endpoint_id = e.endpoint_id
-                        ORDER BY w.created_at DESC
-                        LIMIT 100) as webhook_events
-                    FROM machines m 
-                    LEFT JOIN policies p ON m.policy_id = p.id AND m.api_key_id = p.api_key_id
-                    WHERE m.api_key_id = ?";
-                    
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['machine_status'])) {
-                        $query .= " AND m.status = ?";
-                        $params[] = $filters['machine_status'];
-                    }
-                    
-                    if (isset($filters['machine_name'])) {
-                        $query .= " AND m.name LIKE ?";
-                        $params[] = "%{$filters['machine_name']}%";
-                    }
-                    
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-
-                    // Decodifica os eventos do webhook e configurações da política
-                    return array_map(function($row) {
-                        if (isset($row['webhook_events']) && is_string($row['webhook_events'])) {
-                            $row['webhook_events'] = json_decode($row['webhook_events'], true) ?? [];
-                        } else {
-                            $row['webhook_events'] = [];
-                        }
-                        
-                        if (isset($row['policy_settings']) && is_string($row['policy_settings'])) {
-                            $row['policy_settings'] = json_decode($row['policy_settings'], true) ?? [];
-                        }
-                        
-                        return $row;
-                    }, $results);
-                },
-                
-                'packages' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM packages WHERE api_key_id = ?";
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['package_type'])) {
-                        $query .= " AND type = ?";
-                        $params[] = $filters['package_type'];
-                    }
-                    
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    return $stmt->fetchAll();
-                },
-                
-                'policies' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM policies WHERE api_key_id = ?";
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['policy_status'])) {
-                        $query .= " AND status = ?";
-                        $params[] = $filters['policy_status'];
-                    }
-                    
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    return $stmt->fetchAll();
-                },
-                
-                'quarantine' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM quarantine_items WHERE api_key_id = ?";
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['threat_type'])) {
-                        $query .= " AND threat_type = ?";
-                        $params[] = $filters['threat_type'];
-                    }
-                    
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    return $stmt->fetchAll();
-                },
-                
-                'installation_links' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM installation_links WHERE api_key_id = ?";
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['link_status'])) {
-                        $query .= " AND status = ?";
-                        $params[] = $filters['link_status'];
-                    }
-                    
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    return $stmt->fetchAll();
-                },
-                
-                'scan_tasks' => function() use ($apiKeyId, $filters) {
-                    $query = "SELECT * FROM scan_tasks WHERE api_key_id = ?";
-                    $params = [$apiKeyId];
-                    
-                    if (isset($filters['task_status'])) {
-                        $query .= " AND status = ?";
-                        $params[] = $filters['task_status'];
-                    }
-                    
-                    $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    return $stmt->fetchAll();
-                }
+            // Lista de tabelas válidas
+            $validTables = [
+                'endpoints',
+                'licenses',
+                'policies',
+                'webhook_events',
+                'companies',
+                'accounts'
             ];
-            
-            // Execute queries for all requested tables
-            foreach ($tables as $table) {
+
+            // Se uma tabela específica foi solicitada
+            if (!empty($requestedTable)) {
+                Logger::info('Buscando tabela específica', [
+                    'tabela' => $requestedTable,
+                    'é_válida' => in_array($requestedTable, $validTables)
+                ]);
+
+                if (in_array($requestedTable, $validTables) && isset($tableQueries[$requestedTable])) {
+                    $result = $tableQueries[$requestedTable]($apiKeyId, $filters);
+                    Logger::info("Resultado {$requestedTable}", ['count' => count($result)]);
+                    return $result;
+                }
+
+                Logger::info('Tabela não encontrada ou inválida', ['tabela' => $requestedTable]);
+                return [];
+            }
+
+            // Se nenhuma tabela foi especificada, retorna apenas as válidas
+            Logger::info('Buscando tabelas válidas');
+            $results = [];
+            foreach ($validTables as $table) {
                 if (isset($tableQueries[$table])) {
-                    Logger::debug('Executing query for table', ['table' => $table]);
-                    $results[$table] = $tableQueries[$table]();
+                    $results[$table] = $tableQueries[$table]($apiKeyId, $filters);
+                    Logger::info("Resultado tabela {$table}", ['count' => count($results[$table])]);
                 }
             }
 
-            Logger::info('Queries completed', [
-                'tables_processed' => array_keys($results),
-                'total_results' => count($results)
-            ]);
-            
             return $results;
 
-        } catch (\PDOException $e) {
+        } catch (\Exception $e) {
             Logger::error('Failed to get inventory data', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()

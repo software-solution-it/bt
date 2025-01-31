@@ -23,53 +23,55 @@ class MachineController extends Controller
         exit;
     }
 
-    public function getInventory()
+    public function getInventory($params = [])
     {
         try {
-            $params = $this->getRequestParams();
+            $apiKeyId = $params['api_key_id'] ?? null;
+            if (!$apiKeyId) {
+                throw new \Exception('API Key ID is required');
+            }
 
-            $page = max(1, (int)($params['page'] ?? 1));
-            $perPage = min(100, max(1, (int)($params['perPage'] ?? 30)));
+            // Extrair os filtros
+            $tables = $params['tables'] ?? null;
+            $filters = $params['filters'] ?? [];
 
-            $filters = [
-                'type' => [
-                    'computers' => $params['filters']['type']['computers'] ?? true,
-                    'virtualMachines' => $params['filters']['type']['virtualMachines'] ?? true
-                ],
-                'depth' => [
-                    'allItemsRecursively' => $params['filters']['depth']['allItemsRecursively'] ?? true
-                ]
-            ];
+            // Se tables não for especificado, retorna tudo
+            if (!$tables) {
+                $result = $this->machineService->getAllInventoryData($apiKeyId, $filters);
+            } else {
+                // Se for string, converte para array
+                if (is_string($tables)) {
+                    $tables = [$tables];
+                }
+                $result = $this->machineService->getAllInventoryData([
+                    'api_key_id' => $apiKeyId,
+                    'tables' => $tables,
+                    'filters' => $filters
+                ]);
+            }
 
-            $result = $this->machineService->getMachineInventory([
-                'page' => $page,
-                'perPage' => $perPage,
-                'filters' => $filters,
-                'api_key_id' => $params['api_key_id'] ?? null
-            ]);
+            // Se for uma única tabela, retorna diretamente o resultado
+            if (isset($result['items'])) {
+                return [
+                    'jsonrpc' => '2.0',
+                    'result' => $result,
+                    'id' => null
+                ];
+            }
 
-            $this->sendJsonResponse([
+            // Se for múltiplas tabelas, mantém a estrutura original
+            return [
                 'jsonrpc' => '2.0',
                 'result' => $result,
-                'id' => $params['id'] ?? uniqid('mc_')
-            ]);
+                'id' => null
+            ];
 
         } catch (\Exception $e) {
-            Logger::error('Failed to get machine inventory', [
-                'error' => $e->getMessage()
+            Logger::error('Failed to get inventory', [
+                'error' => $e->getMessage(),
+                'params' => $params
             ]);
-
-            $this->sendJsonResponse([
-                'jsonrpc' => '2.0',
-                'error' => [
-                    'code' => 500,
-                    'message' => 'Internal Server Error',
-                    'data' => [
-                        'details' => $e->getMessage()
-                    ]
-                ],
-                'id' => $params['id'] ?? null
-            ], 500);
+            throw $e;
         }
     }
 

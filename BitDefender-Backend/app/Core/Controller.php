@@ -4,6 +4,11 @@ namespace App\Core;
 
 class Controller
 {
+    public function __construct()
+    {
+        // Empty constructor or minimal initialization
+    }
+
     protected function jsonResponse($data, $statusCode = 200)
     {
         try {

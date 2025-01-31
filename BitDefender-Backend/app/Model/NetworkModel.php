@@ -952,15 +952,58 @@ class NetworkModel extends Model
                 'filters' => json_encode($filters)
             ]);
 
-            // Simplificando a query para usar apenas a tabela endpoints
             $sql = "SELECT * FROM {$this->table}";
             $params = [];
             $whereConditions = [];
 
             if (!empty($filters)) {
+                // Filtro por API Key
                 if (isset($filters['api_key_id'])) {
                     $whereConditions[] = "api_key_id = ?";
                     $params[] = $filters['api_key_id'];
+                }
+
+                // Filtros de Endpoint
+                if (isset($filters['endpoint_status'])) {
+                    $whereConditions[] = "status = ?";
+                    $params[] = $filters['endpoint_status'];
+                }
+
+                if (isset($filters['endpoint_name'])) {
+                    $whereConditions[] = "name LIKE ?";
+                    $params[] = "%{$filters['endpoint_name']}%";
+                }
+
+                if (isset($filters['endpoint_group'])) {
+                    $whereConditions[] = "group_id = ?";
+                    $params[] = $filters['endpoint_group'];
+                }
+
+                if (isset($filters['endpoint_policy'])) {
+                    $whereConditions[] = "policy_id = ?";
+                    $params[] = $filters['endpoint_policy'];
+                }
+
+                if (isset($filters['operating_system'])) {
+                    $whereConditions[] = "operating_system LIKE ?";
+                    $params[] = "%{$filters['operating_system']}%";
+                }
+
+                // Filtros de Data
+                if (isset($filters['date_from'])) {
+                    $whereConditions[] = "created_at >= ?";
+                    $params[] = $filters['date_from'];
+                }
+
+                if (isset($filters['date_to'])) {
+                    $whereConditions[] = "created_at <= ?";
+                    $params[] = $filters['date_to'];
+                }
+
+                // Filtro por Estado
+                if (isset($filters['state'])) {
+                    $whereConditions[] = "state = ?";
+                    $params[] = $filters['state'];
                 }
             }
 
@@ -968,7 +1011,10 @@ class NetworkModel extends Model
                 $sql .= " WHERE " . implode(' AND ', $whereConditions);
             }
 
-            // Adiciona paginação
+            // Ordenação
+            $sql .= " ORDER BY created_at DESC";
+
+            // Paginação
             $sql .= " LIMIT ? OFFSET ?";
             $params[] = $perPage;
             $params[] = ($page - 1) * $perPage;

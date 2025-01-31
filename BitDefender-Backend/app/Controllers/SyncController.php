@@ -10,10 +10,23 @@ use App\Services\MachineService;
 class SyncController extends Controller
 {
     private $syncService;
+    private $machineService;
     
     public function __construct()
     {
-        $this->syncService = new SyncService();
+        try {
+            parent::__construct();
+            $this->syncService = new SyncService();
+            $this->machineService = new MachineService();
+            
+            Logger::info('SyncController initialized successfully');
+        } catch (\Exception $e) {
+            Logger::error('Failed to initialize SyncController', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
     }
     
     public function syncAll($params)
@@ -450,15 +463,26 @@ class SyncController extends Controller
     public function getMachineInventory($params)
     {
         try {
+            Logger::info('SyncController::getMachineInventory - Início', [
+                'params' => $params
+            ]);
+
             if (!isset($params['api_key_id'])) {
                 throw new \Exception('API Key ID is required');
             }
 
-            $result = $this->syncService->getMachineInventory($params);
+            $result = $this->machineService->getAllInventoryData($params);
             
+            Logger::info('SyncController::getMachineInventory - Resultado', [
+                'tipo' => gettype($result),
+                'count' => is_array($result) ? count($result) : 0
+            ]);
+
             return $this->jsonResponse([
                 'jsonrpc' => '2.0',
-                'result' => $result,
+                'result' => [
+                    'items' => $result
+                ],
                 'id' => $params['id'] ?? null
             ], 200);
 
@@ -479,16 +503,6 @@ class SyncController extends Controller
                 ],
                 'id' => $params['id'] ?? null
             ], 500);
-        }
-    }
-
-    public function events()
-    {
-        try {
-            $response = $this->syncService->getEvents();
-            return response()->json($response);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 }
