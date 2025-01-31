@@ -77,6 +77,15 @@ export default function Licenses() {
 
   const columns = [
     {
+      title: 'Empresa',
+      key: 'company',
+      render: (_, record) => (
+        <Tooltip title={record.company_name || record.name}>
+          <span>{record.company_name || record.name}</span>
+        </Tooltip>
+      ),
+    },
+    {
       title: 'Chave da Licença',
       dataIndex: 'license_key',
       key: 'license_key',
@@ -86,21 +95,6 @@ export default function Licenses() {
           <span>{text}</span>
         </Tooltip>
       ),
-    },
-    {
-      title: 'Tipo',
-      dataIndex: 'is_addon',
-      key: 'is_addon',
-      render: (isAddon) => (
-        <Tag color={isAddon ? 'purple' : 'blue'}>
-          {isAddon ? 'Add-on' : 'Principal'}
-        </Tag>
-      ),
-      filters: [
-        { text: 'Principal', value: false },
-        { text: 'Add-on', value: true },
-      ],
-      onFilter: (value, record) => record.is_addon === value,
     },
     {
       title: 'Slots Utilizados',
@@ -128,24 +122,22 @@ export default function Licenses() {
       sorter: (a, b) => new Date(a.expiry_date) - new Date(b.expiry_date),
     },
     {
-      title: 'Tipo de Subscrição',
-      dataIndex: 'subscription_type',
-      key: 'subscription_type',
+      title: 'Tipo de Projeto',
+      dataIndex: 'service_type',
+      key: 'service_type',
       filters: [
-        { text: 'Trial', value: 1 },
-        { text: 'Licenciada', value: 2 },
-        { text: 'Mensal Herdada', value: 3 },
+        { text: 'Produtos', value: 'Produtos' },
+        { text: 'Serviços', value: 'Serviços' },
       ],
-      onFilter: (value, record) => record.subscription_type === value,
+      onFilter: (value, record) => record.service_type === value,
       render: (type) => {
         const types = {
-          1: { text: 'Trial', color: 'orange' },
-          2: { text: 'Licenciada', color: 'green' },
-          3: { text: 'Mensal Herdada', color: 'blue' },
+          'Produtos': { text: 'Produtos', color: 'blue' },
+          'Serviços': { text: 'Serviços', color: 'green' },
         };
         return (
           <Tag color={types[type]?.color || 'default'}>
-            {types[type]?.text || 'Desconhecido'}
+            {types[type]?.text || type || 'Desconhecido'}
           </Tag>
         );
       },
@@ -155,7 +147,7 @@ export default function Licenses() {
       dataIndex: 'updated_at',
       key: 'updated_at',
       render: (date) => date ? new Date(date).toLocaleString() : 'N/A',
-      sorter: (a, b) => new Date(a.created_at) - new Date(b.created_at),
+      sorter: (a, b) => new Date(a.updated_at) - new Date(b.updated_at),
     },
   ];
 
