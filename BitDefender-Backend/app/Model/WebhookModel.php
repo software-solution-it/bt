@@ -58,14 +58,27 @@ class WebhookModel extends Model
     public function saveEvent($eventData)
     {
         try {
-            $stmt = $this->db->prepare("
-                INSERT INTO {$this->table} 
-                (endpoint_id, api_key_id, event_type, event_data, severity, status, computer_name, computer_ip, created_at)
-                VALUES 
-                (:endpoint_id, :api_key_id, :event_type, :event_data, :severity, :status, :computer_name, :computer_ip, :created_at)
-            ");
+            Logger::info('Saving webhook event', ['data' => $eventData]); // Debug log
 
-            $stmt->execute($eventData);
+            // Garantir que todos os campos necessários existam
+            $data = [
+                'endpoint_id' => $eventData['endpoint_id'] ?? null,
+                'event_type' => $eventData['event_type'],
+                'event_data' => $eventData['event_data'],
+                'severity' => $eventData['severity'],
+                'status' => $eventData['status'],
+                'computer_name' => $eventData['computer_name'],
+                'computer_ip' => $eventData['computer_ip'],
+                'created_at' => $eventData['created_at']
+            ];
+
+            $sql = "INSERT INTO {$this->table} 
+                (endpoint_id, event_type, event_data, severity, status, computer_name, computer_ip, created_at)
+                VALUES 
+                (:endpoint_id, :event_type, :event_data, :severity, :status, :computer_name, :computer_ip, :created_at)";
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($data);
             return $this->db->lastInsertId();
 
         } catch (\PDOException $e) {
