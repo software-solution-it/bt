@@ -269,7 +269,6 @@ class MachineModel extends Model
                         )
                         FROM webhook_events w 
                         WHERE w.endpoint_id = e.endpoint_id
-                        AND w.api_key_id = e.api_key_id
                         ORDER BY w.created_at DESC
                         LIMIT 100) as webhook_events
                     FROM endpoints e 
@@ -373,7 +372,6 @@ class MachineModel extends Model
                                 'event_type', w.event_type,
                                 'event_data', w.event_data,
                                 'severity', w.severity,
-                                'status', w.status,
                                 'computer_name', w.computer_name,
                                 'computer_ip', w.computer_ip,
                                 'created_at', w.created_at,
@@ -382,8 +380,7 @@ class MachineModel extends Model
                             )
                         )
                         FROM webhook_events w 
-                        WHERE w.computer_name COLLATE utf8mb4_unicode_ci = m.name COLLATE utf8mb4_unicode_ci
-                        AND w.api_key_id = m.api_key_id
+                        INNER JOIN endpoints e ON w.endpoint_id = e.endpoint_id
                         ORDER BY w.created_at DESC
                         LIMIT 100) as webhook_events
                     FROM machines m 

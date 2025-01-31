@@ -34,10 +34,10 @@ class WebhookModel extends Model
                 INDEX idx_event_type (event_type),
                 INDEX idx_severity (severity),
                 INDEX idx_created_at (created_at),
-                FOREIGN KEY (endpoint_id) REFERENCES endpoints(endpoint_id),
                 INDEX idx_machine (computer_name),
                 INDEX idx_composite_1 (computer_name, event_type),
-                INDEX idx_composite_2 (event_type, severity)
+                INDEX idx_composite_2 (event_type, severity),
+                FOREIGN KEY (endpoint_id) REFERENCES endpoints(endpoint_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
             $this->db->exec($sql);
